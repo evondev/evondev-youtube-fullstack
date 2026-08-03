@@ -34,12 +34,15 @@
 | git | 2.22.0 (cũ, macOS bundled — chưa cần nâng) |
 | Workspace | **CHƯA phải git repo** → phải hỏi trước khi `git init` (theo teach-preferences) |
 
-## ⚠️ Mâu thuẫn cần làm rõ
+## ✅ Đã làm rõ (2026-08-03)
 
-Tuấn tự đánh giá "chưa biết gì về backend", nhưng khi dò Docker tôi thấy trên máy có sẵn container
-**`my-nest-app-db-1` (postgres:16, cổng 5434)** và **`goclaw-postgres-1` (pgvector/pgvector:pg18,
-cổng 5432)**. Tức là **đã từng làm project NestJS + Postgres**. → Phải hỏi thẳng: đã làm tới đâu?
-Nếu đã có nền, Module 0–1 có thể rút gọn đáng kể.
+Trên máy có container `my-nest-app-db-1` (postgres:16) và `goclaw-postgres-1` (pgvector:pg18) —
+đã hỏi, Tuấn xác nhận **đó không phải project do Tuấn viết**; nền backend đúng là từ 0.
+→ Giữ nguyên lộ trình 57 bài, **không rút gọn Module 1**. Xem `learning-records/0001`.
+
+**Lộ trình đã chốt:** Tuấn chọn "chốt như vậy, bắt đầu luôn" — không đổi thứ tự, không rút gọn.
+**Git:** đã `git init` (branch `main`), Tuấn đồng ý commit theo từng bài. Chưa có remote → chỉ commit,
+chưa push.
 
 ## Kết quả verify Bài 00 (chạy thật, 2026-08-03)
 

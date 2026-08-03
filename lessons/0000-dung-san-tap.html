@@ -1,0 +1,448 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Bài 00 · Dựng sân tập: NestJS + Postgres + Redis</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="lesson.css">
+</head>
+<body>
+<div class="wrap">
+
+  <span class="lesson-tag">Module 0 · Bài 00</span>
+  <h1>Dựng sân tập: NestJS + Postgres + Redis</h1>
+  <p class="subtitle">Một hệ thống backend chạy được trên máy bạn — nền móng cho cả 56 bài sau.</p>
+  <p class="meta-line">⏱ ~40 phút · 🎯 Mục tiêu: gõ 3 lệnh kiểm tra và cả 3 đều xanh — API trả lời, Postgres trả lời, Redis trả lời.</p>
+
+  <div class="callout bridge">
+    <div class="ct">🌉 Bắc cầu từ cái bạn đã biết</div>
+    <p>
+      Bạn đã quen <code>npm run dev</code> của Next.js: một tiến trình Node lắng nghe cổng 3000, bạn mở trình
+      duyệt và thấy trang. Backend <em>y hệt vậy</em> — cũng là một tiến trình Node lắng nghe một cổng — chỉ
+      khác ở chỗ nó trả về <strong>JSON thay vì HTML</strong>, và nó cần thêm hai người bạn đứng sau:
+      một <strong>database</strong> (nơi dữ liệu sống sót khi tắt máy) và một <strong>cache</strong>
+      (nơi dữ liệu chết nhanh nhưng đọc cực nhanh).
+    </p>
+    <p style="margin-bottom:0">
+      Bài này không dạy code. Bài này dựng cái <em>sân</em> để 56 bài sau có chỗ mà đá.
+    </p>
+  </div>
+
+  <h2>0. Máy bạn đang có gì (tôi đã dò sẵn)</h2>
+  <p>
+    Tôi đã chạy kiểm tra thật trên máy bạn ngày <strong>03/08/2026</strong>. Đây là hiện trạng — bạn
+    <strong>không cần cài lại</strong> những thứ đã có dấu ✅:
+  </p>
+
+  <table class="data">
+    <thead><tr><th>Công cụ</th><th>Trên máy bạn</th><th>Cần gì</th></tr></thead>
+    <tbody>
+      <tr><td>Node.js</td><td>v22.18.0</td><td>✅ Đủ. NestJS 11 yêu cầu <code>&gt;= 20</code></td></tr>
+      <tr><td>npm</td><td>11.12.1</td><td>✅ Dùng npm cho khoá này</td></tr>
+      <tr><td>Nest CLI</td><td>11.0.23</td><td>✅ Đã cài global rồi</td></tr>
+      <tr><td>Docker Desktop</td><td>28.0.1 + Compose 2.33.1</td><td>⚠️ Đã cài, nhưng <strong>phải mở app lên</strong></td></tr>
+      <tr><td>PostgreSQL (Homebrew)</td><td>18.3, đang chạy ở cổng 5432</td><td>⚠️ Ta <span class="nullcell">không dùng</span> bản này — xem phần 4</td></tr>
+      <tr><td>git</td><td>2.22.0</td><td>✅ Đủ dùng</td></tr>
+    </tbody>
+  </table>
+
+  <div class="callout why">
+    <div class="ct">💡 Vì sao Node v22 mà không nâng lên v24?</div>
+    <p>
+      Node LTS mới nhất hiện là v24, nhưng
+      <a href="https://docs.nestjs.com/first-steps" target="_blank">docs NestJS</a> chỉ yêu cầu
+      <code>Node &gt;= 20</code>. v22 của bạn thoả. <strong>Nguyên tắc senior: đừng nâng version khi
+      chưa có lý do.</strong> Mỗi lần nâng là một lần rủi ro; đổi lấy cái gì thì phải nói được.
+      Ta sẽ nâng khi nào có thứ cụ thể cần tới v24.
+    </p>
+  </div>
+
+  <h2>1. Tạo project <code>elearning-api</code></h2>
+  <p>
+    Mở Terminal. Đầu tiên vào đúng thư mục khoá học này, rồi để Nest CLI sinh bộ khung:
+  </p>
+
+  <div class="code-block">
+    <span class="code-label">bash — tạo project</span>
+<pre><code><span class="cmt"># Vào thư mục workspace của khoá học (nơi chứa lessons/, MISSION.md...)</span>
+<span class="kw">cd</span> ~/Documents/fullstack
+
+<span class="cmt"># Sinh bộ khung NestJS. Giải thích từng cờ:</span>
+<span class="cmt">#   --package-manager npm : dùng npm, khỏi bị CLI hỏi qua lại</span>
+<span class="cmt">#   --skip-git            : KHÔNG tạo git repo riêng bên trong project,</span>
+<span class="cmt">#                           vì ta muốn git quản lý cả workspace (bài học + code)</span>
+<span class="cmt">#   --strict              : bật TypeScript strict mode ngay từ đầu</span>
+<span class="fn">nest</span> new elearning-api --package-manager npm --skip-git --strict</code></pre>
+  </div>
+
+  <p>
+    Lệnh này mất ~1–2 phút (nó cài <code>node_modules</code>). Chạy xong bạn sẽ thấy:
+  </p>
+
+  <div class="code-block">
+    <span class="code-label">output thật (đã verify trên máy bạn)</span>
+<pre><code>🚀  Successfully created project elearning-api
+👉  Get started with the following commands:
+
+$ <span class="kw">cd</span> elearning-api
+$ npm run start</code></pre>
+  </div>
+
+  <div class="callout tip">
+    <div class="ct">🔎 Bộ khung vừa sinh ra có gì</div>
+    <ul>
+      <li><code>src/main.ts</code> — <strong>cửa vào</strong>. Chỗ tiến trình Node khởi động và mở cổng.</li>
+      <li><code>src/app.module.ts</code> — <strong>gốc cây module</strong>. Nest lắp ráp toàn hệ thống từ đây.</li>
+      <li><code>src/app.controller.ts</code> — nơi khai báo "URL nào thì gọi hàm nào".</li>
+      <li><code>src/app.service.ts</code> — nơi chứa nghiệp vụ, tách khỏi HTTP.</li>
+    </ul>
+    <p style="margin-bottom:0">
+      Bốn file này là toàn bộ triết lý của Nest. <strong>Bài 08–10 sẽ mổ xẻ vì sao lại chia như vậy</strong> —
+      giờ chỉ cần biết chúng tồn tại.
+    </p>
+  </div>
+
+  <h2>2. Đổi cổng 3000 → 3333 (bắt buộc với máy bạn)</h2>
+
+  <div class="callout danger">
+    <div class="ct">🚨 Tôi đã thử và nó gãy trên máy bạn</div>
+    <p>
+      Nest mặc định chạy cổng <strong>3000</strong>. Nhưng máy bạn <strong>đang có một dev server Next.js
+      chiếm cổng 3000</strong> (tôi kiểm tra thấy tiến trình <code>node</code> PID 74939 đang giữ nó).
+      Nếu để nguyên, bạn sẽ gặp đúng lỗi này:
+    </p>
+    <div class="code-block" style="margin-top:10px">
+      <span class="code-label">lỗi thật tôi gặp khi verify</span>
+<pre><code>Error: listen EADDRINUSE: address already in use :::3000
+  code: <span class="str">'EADDRINUSE'</span>,
+  port: <span class="num">3000</span></code></pre>
+    </div>
+    <p style="margin-bottom:0">
+      <code>EADDRINUSE</code> = "địa chỉ đang bị dùng". Một cổng chỉ được <strong>đúng một</strong> tiến
+      trình lắng nghe. Đây là lỗi backend kinh điển — nhớ mặt nó luôn, bạn sẽ gặp lại nhiều.
+    </p>
+  </div>
+
+  <p>Mở <code>src/main.ts</code> và sửa thành:</p>
+
+  <div class="code-block">
+    <span class="code-label">elearning-api/src/main.ts</span>
+<pre><code><span class="kw">import</span> { NestFactory } <span class="kw">from</span> <span class="str">'@nestjs/core'</span>;
+<span class="kw">import</span> { AppModule } <span class="kw">from</span> <span class="str">'./app.module'</span>;
+
+<span class="kw">async function</span> <span class="fn">bootstrap</span>() {
+  <span class="cmt">// Nest đọc AppModule, tự lắp ráp toàn bộ cây phụ thuộc, rồi trả về app đã sẵn sàng.</span>
+  <span class="kw">const</span> app = <span class="kw">await</span> NestFactory.<span class="fn">create</span>(AppModule);
+
+  <span class="cmt">// 3333 thay vì 3000 vì cổng 3000 trên máy bạn đang bị Next.js giữ.</span>
+  <span class="cmt">// process.env.PORT được ưu tiên: khi deploy production, nhà cung cấp</span>
+  <span class="cmt">// (Railway/Fly/Heroku...) sẽ tự tiêm PORT vào — code không cần đổi. (12-factor)</span>
+  <span class="kw">await</span> app.<span class="fn">listen</span>(process.env.PORT ?? <span class="num">3333</span>);
+}
+<span class="fn">bootstrap</span>();</code></pre>
+  </div>
+
+  <h2>3. Chạy thử API</h2>
+
+  <div class="code-block">
+    <span class="code-label">bash — terminal #1 (để cửa sổ này chạy)</span>
+<pre><code><span class="kw">cd</span> ~/Documents/fullstack/elearning-api
+
+<span class="cmt"># start:dev = chạy ở chế độ watch, sửa file là tự khởi động lại</span>
+<span class="cmt"># (giống hệt `npm run dev` của Next.js mà bạn đã quen)</span>
+npm run start:dev</code></pre>
+  </div>
+
+  <p>Mở <strong>một cửa sổ Terminal thứ hai</strong> và gọi thử:</p>
+
+  <div class="code-block">
+    <span class="code-label">bash — terminal #2</span>
+<pre><code><span class="cmt"># -i = in ra cả header của response, không chỉ body.</span>
+<span class="cmt"># Tập nhìn header ngay từ bây giờ — Bài 02 sẽ mổ xẻ từng dòng.</span>
+<span class="fn">curl</span> -i http://localhost:3333</code></pre>
+  </div>
+
+  <div class="code-block">
+    <span class="code-label">output thật (đã verify)</span>
+<pre><code>HTTP/1.1 <span class="num">200</span> OK
+X-Powered-By: Express
+Content-Type: text/html; charset=utf-8
+Content-Length: <span class="num">12</span>
+
+Hello World!</code></pre>
+  </div>
+
+  <div class="callout why">
+    <div class="ct">💡 Ba thứ đáng chú ý trong 5 dòng trên</div>
+    <ul style="margin-bottom:0">
+      <li><code>200 OK</code> — <strong>status code</strong>. Máy đọc dòng này để biết thành công hay thất bại, chứ không đọc chữ.</li>
+      <li><code>X-Powered-By: Express</code> — NestJS <strong>không tự viết HTTP server</strong>; nó chạy trên Express. Nest là lớp <em>kiến trúc</em>, không phải lớp <em>mạng</em>. Điểm này rất hay bị hỏi khi phỏng vấn.</li>
+      <li><code>Content-Type: text/html</code> — nó đang trả HTML. API thật phải trả <code>application/json</code>. Bài 02 sẽ sửa.</li>
+    </ul>
+  </div>
+
+  <h2>4. Dựng Postgres + Redis bằng Docker</h2>
+
+  <div class="callout why">
+    <div class="ct">💡 Vì sao dùng Docker khi máy bạn ĐÃ có Postgres 18 qua Homebrew?</div>
+    <p>Ba lý do, theo thứ tự quan trọng:</p>
+    <ol>
+      <li><strong>Giống production.</strong> Server thật của bạn sau này chạy Postgres trong container Linux.
+        Bản Homebrew chạy trên macOS — khác OS, khác cách build. "Chạy được trên máy tôi" là câu nói
+        khiến freelancer mất khách.</li>
+      <li><strong>Vứt đi được.</strong> Làm hỏng database? <code>docker compose down -v</code> rồi dựng lại
+        trong 10 giây. Với Homebrew bạn phải đi dọn thủ công.</li>
+      <li><strong>Mỗi project một bộ.</strong> Bạn đang có sẵn 2 project khác dùng Postgres trên máy này.
+        Docker cho mỗi project database riêng, version riêng, không giẫm chân nhau.</li>
+    </ol>
+    <p style="margin-bottom:0">
+      <strong>Đánh đổi:</strong> Docker tốn RAM và chậm hơn native một chút. Với dev thì không đáng kể.
+      Bản Homebrew ta vẫn giữ — dùng lệnh <code>psql</code> của nó làm <em>client</em> để kết nối vào container.
+    </p>
+  </div>
+
+  <p><strong>Bước 4a.</strong> Mở Docker Desktop (bắt buộc — trên máy bạn daemon chưa chạy):</p>
+
+  <div class="code-block">
+    <span class="code-label">bash — bật Docker</span>
+<pre><code><span class="cmt"># Mở app Docker Desktop</span>
+<span class="fn">open</span> -a Docker
+
+<span class="cmt"># Chờ ~15-30 giây rồi kiểm tra. In ra số version = daemon đã sẵn sàng.</span>
+<span class="cmt"># Nếu báo "Cannot connect to the Docker daemon" thì chờ thêm rồi chạy lại.</span>
+<span class="fn">docker</span> info --format <span class="str">'{{.ServerVersion}}'</span></code></pre>
+  </div>
+
+  <p><strong>Bước 4b.</strong> Tạo file <code>docker-compose.yml</code> ở thư mục gốc của
+  <code>elearning-api</code> (dùng nút Copy góc phải):</p>
+
+  <div class="code-block">
+    <span class="code-label">elearning-api/docker-compose.yml</span>
+<pre><code><span class="cmt"># File này mô tả HẠ TẦNG của project dưới dạng code.</span>
+<span class="cmt"># Ai clone repo về cũng dựng được y hệt môi trường của bạn bằng 1 lệnh.</span>
+services:
+  postgres:
+    <span class="cmt"># alpine = bản Linux siêu nhẹ (~80MB thay vì ~400MB)</span>
+    image: postgres:<span class="num">18</span>-alpine
+    container_name: elearning-postgres
+    <span class="cmt"># Tự bật lại khi Docker Desktop khởi động, trừ khi bạn chủ động stop</span>
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: elearning
+      POSTGRES_PASSWORD: elearning_dev_pw
+      POSTGRES_DB: elearning
+    ports:
+      <span class="cmt"># "5433:5432" = cổng-trên-máy-bạn : cổng-bên-trong-container.</span>
+      <span class="cmt"># Dùng 5433 vì 5432 đang bị Postgres Homebrew của bạn giữ.</span>
+      - <span class="str">"5433:5432"</span>
+    volumes:
+      <span class="cmt"># ⚠️ Postgres 18 gắn volume ở /var/lib/postgresql — KHÔNG phải /data (xem cảnh báo dưới)</span>
+      - postgres-data:/var/lib/postgresql
+    healthcheck:
+      <span class="cmt"># Docker tự gõ lệnh này để biết DB đã SẴN SÀNG NHẬN KẾT NỐI chưa.</span>
+      <span class="cmt"># "container đang chạy" KHÁC "database sẵn sàng" — nhầm chỗ này là app crash lúc khởi động.</span>
+      test: [<span class="str">"CMD-SHELL"</span>, <span class="str">"pg_isready -U elearning -d elearning"</span>]
+      interval: 5s
+      timeout: 5s
+      retries: <span class="num">10</span>
+
+  redis:
+    image: redis:<span class="num">8</span>-alpine
+    container_name: elearning-redis
+    restart: unless-stopped
+    ports:
+      <span class="cmt"># 6380 thay vì 6379 mặc định, cho đồng bộ với quy ước "+1" ở trên</span>
+      - <span class="str">"6380:6379"</span>
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: [<span class="str">"CMD"</span>, <span class="str">"redis-cli"</span>, <span class="str">"ping"</span>]
+      interval: 5s
+      timeout: 5s
+      retries: <span class="num">10</span>
+
+<span class="cmt"># Volume = ổ đĩa ảo do Docker quản lý. Đây là thứ giữ dữ liệu SỐNG SÓT</span>
+<span class="cmt"># khi container bị xoá. Không có nó, `docker compose down` là mất sạch DB.</span>
+volumes:
+  postgres-data:
+  redis-data:</code></pre>
+  </div>
+
+  <div class="callout danger">
+    <div class="ct">🚨 Cái bẫy tôi đã dính khi verify bài này</div>
+    <p>
+      Lần đầu tôi viết <code>postgres-data:/var/lib/postgresql/data</code> — đúng như <strong>mọi tutorial
+      trên mạng</strong>. Container <strong>crash-loop</strong>, restart liên tục, log báo:
+    </p>
+    <div class="code-block" style="margin-top:10px">
+      <span class="code-label">log lỗi thật</span>
+<pre><code>Error: in <span class="num">18</span>+, these Docker images are configured to store database data
+  in a format which is compatible with "pg_ctlcluster"...
+  The suggested container configuration for <span class="num">18</span>+ is to place a single
+  mount at /var/lib/postgresql</code></pre>
+    </div>
+    <p style="margin-bottom:0">
+      Image <code>postgres:18</code> đã <strong>đổi điểm gắn volume</strong> sang
+      <code>/var/lib/postgresql</code> (biến <code>PGDATA</code> giờ trỏ tới
+      <code>/var/lib/postgresql/18/docker</code>). Mọi hướng dẫn viết trước 2025 đều sai ở đây.
+      <br><br>
+      <strong>Bài học lớn hơn cái bug:</strong> khi container chết, việc đầu tiên <em>luôn</em> là
+      <code>docker compose logs &lt;tên-service&gt;</code>. Container không im lặng chết — nó luôn nói
+      lý do. Đa số người mới đi google trước khi đọc log.
+    </p>
+  </div>
+
+  <p><strong>Bước 4c.</strong> Khởi động:</p>
+
+  <div class="code-block">
+    <span class="code-label">bash</span>
+<pre><code><span class="cmt"># up = dựng và chạy; -d = detached (chạy nền, trả lại terminal cho bạn)</span>
+<span class="cmt"># Lần đầu sẽ tải image về, mất ~1-2 phút.</span>
+<span class="fn">docker</span> compose up -d
+
+<span class="cmt"># Chờ ~20 giây cho database khởi tạo lần đầu, rồi kiểm tra trạng thái</span>
+<span class="fn">docker</span> compose ps</code></pre>
+  </div>
+
+  <div class="code-block">
+    <span class="code-label">output thật (đã verify)</span>
+<pre><code>NAME                 STATUS                    PORTS
+elearning-postgres   Up 25 seconds (healthy)   0.0.0.0:5433-&gt;5432/tcp
+elearning-redis      Up 25 seconds (healthy)   0.0.0.0:6380-&gt;6379/tcp</code></pre>
+  </div>
+
+  <p>
+    Chữ <strong><code>(healthy)</code></strong> mới là thứ bạn cần thấy — không phải chỉ <code>Up</code>.
+    Đó là kết quả của khối <code>healthcheck</code> bạn vừa viết.
+  </p>
+
+  <h2>5. Sanity check — ba lệnh phải xanh</h2>
+  <p>
+    Đây là bài kiểm tra chứng minh <strong>cả bộ máy</strong> chạy được. Chạy đủ 3 lệnh:
+  </p>
+
+  <div class="code-block">
+    <span class="code-label">bash — ✅ check 1: Postgres trả lời từ máy bạn</span>
+<pre><code><span class="cmt"># Dùng psql (client Homebrew bạn đã có) nối vào Postgres TRONG container qua cổng 5433.</span>
+<span class="cmt"># PGPASSWORD=... đặt trước lệnh = biến môi trường chỉ sống trong đúng lệnh này.</span>
+<span class="cmt"># Đây là bài test tổng hợp: sai cổng, sai mật khẩu, hay container chưa lên -&gt; đều gãy ở đây.</span>
+<span class="fn">PGPASSWORD</span>=elearning_dev_pw psql -h localhost -p <span class="num">5433</span> -U elearning -d elearning -c <span class="str">"SELECT 1+1 AS sanity;"</span></code></pre>
+  </div>
+
+  <div class="code-block">
+    <span class="code-label">phải ra đúng thế này</span>
+<pre><code> sanity
+--------
+      <span class="num">2</span>
+(<span class="num">1</span> row)</code></pre>
+  </div>
+
+  <div class="code-block">
+    <span class="code-label">bash — ✅ check 2: Redis trả lời</span>
+<pre><code><span class="cmt"># exec = chạy một lệnh BÊN TRONG container đang chạy.</span>
+<span class="cmt"># redis-cli ping là "cú đấm thử" chuẩn của Redis, phải trả về PONG.</span>
+<span class="fn">docker</span> compose exec redis redis-cli ping</code></pre>
+  </div>
+
+  <div class="code-block">
+    <span class="code-label">phải ra</span>
+<pre><code>PONG</code></pre>
+  </div>
+
+  <div class="code-block">
+    <span class="code-label">bash — ✅ check 3: bộ test của app chạy được</span>
+<pre><code><span class="cmt"># Nest sinh sẵn 1 test mẫu. Chạy được nghĩa là toolchain TypeScript + Jest ổn.</span>
+<span class="cmt"># Module 7 sẽ quay lại đây và viết test thật.</span>
+<span class="kw">cd</span> ~/Documents/fullstack/elearning-api &amp;&amp; npm test</code></pre>
+  </div>
+
+  <div class="code-block">
+    <span class="code-label">phải ra (đã verify)</span>
+<pre><code>Test Suites: <span class="num">1</span> passed, <span class="num">1</span> total
+Tests:       <span class="num">1</span> passed, <span class="num">1</span> total</code></pre>
+  </div>
+
+  <div class="callout tip">
+    <div class="ct">🧰 Bốn lệnh Docker bạn sẽ dùng suốt khoá — thuộc lòng luôn</div>
+    <ul style="margin-bottom:0">
+      <li><code>docker compose up -d</code> — bật hạ tầng (làm mỗi lần khởi động máy)</li>
+      <li><code>docker compose ps</code> — xem cái gì đang chạy và có healthy không</li>
+      <li><code>docker compose logs -f postgres</code> — <strong>xem log khi có sự cố</strong> (<code>-f</code> = theo dõi liên tục)</li>
+      <li><code>docker compose down</code> — tắt hạ tầng, <strong>giữ nguyên dữ liệu</strong>.
+        Thêm <code>-v</code> là <span class="nullcell">xoá sạch cả dữ liệu</span> — chỉ dùng khi muốn làm lại từ đầu.</li>
+    </ul>
+  </div>
+
+  <div class="quiz">
+    <h3>🧠 Kiểm tra nhanh (bấm để có phản hồi ngay)</h3>
+
+    <div class="q">Câu 1. Bạn chạy <code>docker compose ps</code>, thấy postgres <code>Up 3 seconds</code> nhưng chưa có chữ <code>(healthy)</code>. App của bạn khởi động ngay lúc đó và crash vì không nối được DB. Vì sao?</div>
+    <button class="opt" data-correct="false" data-explain="Sai cổng thì lỗi sẽ là 'connection refused' ngay lập tức và luôn luôn xảy ra, chứ không phải chỉ xảy ra trong vài giây đầu. Ở đây vấn đề là THỜI ĐIỂM.">A. Vì cổng 5433 bị sai, phải dùng 5432</button>
+    <button class="opt" data-correct="true" data-explain="Chuẩn. 'Container đang chạy' KHÁC 'database sẵn sàng nhận kết nối'. Postgres cần vài giây để khởi tạo cluster, ghi file, mở socket. Đó chính là lý do ta viết healthcheck: nó là cách máy móc trả lời câu hỏi 'sẵn sàng CHƯA?'. Trong production, đây là gốc rễ của cả một lớp lỗi mang tên race condition lúc khởi động — bài 41 sẽ quay lại với health check ở tầng app.">B. Vì container đã chạy nhưng Postgres bên trong chưa khởi tạo xong — "Up" không có nghĩa là "sẵn sàng"</button>
+    <button class="opt" data-correct="false" data-explain="Volume ảnh hưởng tới việc dữ liệu có sống sót sau khi xoá container hay không, không ảnh hưởng tới tốc độ sẵn sàng. Hãy nghĩ theo hướng: Up và healthy khác nhau chỗ nào?">C. Vì thiếu volume nên Postgres phải tạo lại dữ liệu</button>
+    <div class="feedback"></div>
+
+    <div class="q">Câu 2. Trong response của <code>curl</code>, ta thấy header <code>X-Powered-By: Express</code>. Điều đó nói lên gì về NestJS?</div>
+    <button class="opt" data-correct="false" data-explain="Ngược lại — nó cho thấy Nest KHÔNG tự viết tầng HTTP. Nếu Nest tự viết server riêng thì header này đã mang tên Nest.">A. NestJS tự cài đặt tầng HTTP riêng, nhanh hơn Express</button>
+    <button class="opt" data-correct="true" data-explain="Chính xác. Nest là một lớp KIẾN TRÚC (module, dependency injection, decorator) đặt LÊN TRÊN một HTTP server có sẵn — mặc định là Express, và có thể đổi sang Fastify. Hệ quả thực tế: mọi middleware Express bạn từng biết vẫn dùng được, và khi debug sâu về mạng bạn thực chất đang debug Express. Bài 07 sẽ đi vào đúng chỗ này.">B. Nest là lớp kiến trúc đặt trên một HTTP server có sẵn (mặc định Express, đổi được sang Fastify)</button>
+    <button class="opt" data-correct="false" data-explain="Không phải nhầm lẫn — đây là hành vi mặc định có chủ đích của Nest. Nhưng bạn đúng ở chỗ header này KHÔNG nên lộ ra ở production (nó tiết lộ stack cho kẻ tấn công) — Bài 29 sẽ tắt nó.">C. Đây là nhầm lẫn cấu hình, phải sửa lại</button>
+    <div class="feedback"></div>
+
+    <div class="q">Câu 3. Bạn muốn xoá sạch database để dựng lại từ đầu vì schema đã rối. Lệnh nào đúng?</div>
+    <button class="opt" data-correct="false" data-explain="Lệnh này chỉ tắt container và GIỮ NGUYÊN volume — dữ liệu cũ vẫn còn nguyên khi bạn up lại. Đây chính là điều bạn KHÔNG muốn lúc này.">A. <code>docker compose down</code></button>
+    <button class="opt" data-correct="true" data-explain="Đúng. Cờ -v xoá luôn volume, tức xoá ổ đĩa chứa dữ liệu. Lần `up` sau Postgres khởi tạo database trắng tinh. ⚠️ Ghi nhớ cho sau này: gõ nhầm lệnh này trên server production là mất toàn bộ dữ liệu khách hàng. Ở dev thì đây là công cụ cứu mạng; ở production nó là bom.">B. <code>docker compose down -v</code></button>
+    <button class="opt" data-correct="false" data-explain="restart chỉ khởi động lại tiến trình bên trong container. Dữ liệu nằm trên volume nên không hề mất đi.">C. <code>docker compose restart</code></button>
+    <div class="feedback"></div>
+  </div>
+
+  <div class="callout tip">
+    <div class="ct">✅ Bạn vừa đạt được</div>
+    <ul class="checklist">
+      <li>Có một API NestJS chạy ở <code>localhost:3333</code>, trả lời được <code>curl</code></li>
+      <li>Có PostgreSQL 18 và Redis 8 chạy trong Docker, cả hai đều <code>healthy</code></li>
+      <li>Hiểu cổng là gì và vì sao <code>EADDRINUSE</code> xảy ra</li>
+      <li>Biết phân biệt "container Up" và "service sẵn sàng" — và healthcheck giải quyết việc đó</li>
+      <li>Biết bốn lệnh Docker sẽ dùng hằng ngày, và biết lệnh nào nguy hiểm</li>
+      <li>Biết NestJS chạy trên Express, không phải tự viết tầng mạng</li>
+    </ul>
+  </div>
+
+  <h2>6. Câu hỏi tư duy (bắc cầu sang Bài 01)</h2>
+  <p>
+    Bạn vừa gõ <code>curl -i http://localhost:3333</code> và nhận về vài dòng chữ. Hãy nghĩ kỹ:
+  </p>
+  <p>
+    <strong>Giữa lúc bạn bấm Enter và lúc chữ "Hello World!" hiện ra — chính xác thì cái gì đã đi qua
+    dây mạng?</strong> Nó là chữ hay là số nhị phân? Ai quyết định dòng <code>200 OK</code> phải nằm ở
+    dòng đầu tiên? Và nếu tôi bảo bạn <em>tự tay gõ</em> một HTTP response bằng <code>telnet</code>
+    thì bạn phải gõ gì?
+  </p>
+  <p>
+    Nếu trả lời được, bạn sẽ không bao giờ còn thấy backend là ma thuật. Bài 01 ta sẽ vứt NestJS sang một
+    bên và tự viết web server bằng <code>node:http</code> thuần — để thấy Nest thực ra đã che giấu cái gì.
+  </p>
+
+  <div class="next-box">
+    <div class="nl">→ Bài tiếp theo</div>
+    <div class="nt">Bài 01 · HTTP thực sự là gì — tự viết web server bằng <code>node:http</code> thuần</div>
+    <p class="nd">Không framework, không decorator. 15 dòng code trần trụi để bạn thấy rõ một request thực chất chỉ là một đoạn văn bản có quy tắc.</p>
+  </div>
+
+  <div class="navbar">
+    <a href="index.html" class="disabled">← Trước</a>
+    <a href="index.html">🏠 Mục lục</a>
+    <a href="index.html">Sau →</a>
+  </div>
+
+  <p class="try-it">
+    💬 <strong>Tôi là người dạy của bạn.</strong> Chạy tới bước nào bị lỗi — dán nguyên văn thông báo lỗi
+    cho tôi, đừng tự mò. Và khi làm xong cả 3 sanity check, báo tôi biết: tôi sẽ <strong>đọc code thật
+    trong thư mục của bạn và chạy lại test</strong> để xác nhận sân tập đúng chuẩn trước khi sang Bài 01.
+  </p>
+
+</div>
+<script src="lesson-enhance.js"></script>
+</body>
+</html>
