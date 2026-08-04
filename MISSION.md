@@ -30,6 +30,19 @@ hỏng chỗ nào.
 - Máy: macOS, Node v22.18.0, pnpm 9.10.0, Docker 28.0.1 (daemon chưa bật), PostgreSQL 18.3 (Homebrew),
   Nest CLI 11.0.23.
 
+## Parallel project
+
+**có — `elearning-api`**: nền tảng học trực tuyến (người dùng, khoá học, giỏ hàng, thanh toán, tiến độ
+học), viết bằng NestJS, deploy thật lên internet ở Bài 48 và dùng làm portfolio freelance ở Bài 56.
+
+- Dự án này **thay luôn vai trò sân tập** — không có thư mục practice riêng. Mọi code Tuấn viết đều
+  nằm trong một thứ chạy được.
+- **"Xong" trông như thế nào:** API public có domain, có tài liệu, người lạ đăng ký được tài khoản,
+  mua được một khoá học bằng thẻ test, xem được nội dung đã mua, và có CI chạy test trước mỗi lần deploy.
+- **Ai dùng:** demo cho khách freelance; đồng thời là bộ khung để Tuấn tự ship sản phẩm riêng sau này.
+- Ngoại lệ trung thực: **Bài 01–04 là kiến thức nền** (viết HTTP server không framework để hiểu bản
+  chất). Phần này sống ở thư mục `lab/` bên trong project, không ghép gượng ép vào API chính.
+
 ## Stack đã chốt
 
 NestJS 11 · TypeScript · PostgreSQL · Prisma · Redis (BullMQ) · Docker · GitHub Actions.

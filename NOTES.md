@@ -66,6 +66,25 @@ generator mặc định là `prisma-client` (không phải `prisma-client-js`), 
 sinh vào source tree chứ không nằm trong `node_modules`, và Postgres cần **driver adapter**
 (`@prisma/adapter-pg` + `pg`). → Bài 17 phải soạn theo docs v7, tuyệt đối không theo trí nhớ.
 
+## Chế độ dự án song song: **BẬT** (rule A27)
+
+`elearning-api` **là** sân tập, không có thư mục practice riêng. Mỗi bài phải đắp một mẩu chạy được
+vào dự án; `index.html` đã ghi rõ từng bài thêm gì (cột phải).
+**Ngoại lệ đã khai báo công khai:** Bài 01–04, 07, 24, 55 là kiến thức nền (sống ở `lab/` hoặc là khảo
+sát) — đã nói thẳng trong intro-card, không ghép gượng.
+
+## Bộ đếm cheat-sheet (rule A22 — mốc CỨNG)
+
+Trigger: **cứ 5 bài** kể từ cheat-sheet gần nhất, **HOẶC** một module chuyển sang xong — cái nào tới trước.
+Cách đếm: số file trong `reference/` so với số bài trong `lessons/`.
+
+| Mốc | Trạng thái |
+|---|---|
+| Bài đã soạn | 1 (Bài 00) |
+| Cheat-sheet đã có | 0 |
+| **Trigger kế tiếp** | **Ngay khi Tuấn xác nhận xong Bài 00** → Module 0 hoàn tất → soạn `reference/docker-lenh-thiet-yeu.html` |
+| Trigger sau đó | Bài 05 (đủ 5 bài kể từ cheat-sheet đầu) |
+
 ## Việc cần làm / theo dõi
 
 - [ ] Hỏi Tuấn có muốn `git init` workspace này không (để commit theo bài).
