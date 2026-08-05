@@ -6,7 +6,10 @@ import tseslint from 'typescript-eslint';
 
 export default tseslint.config(
   {
-    ignores: ['eslint.config.mjs'],
+    // lab/ là thư mục thí nghiệm của Module 1: JS thuần, chạy thẳng bằng `node`,
+    // KHÔNG nằm trong tsconfig của API nên type-aware lint không soi được.
+    // Bỏ qua luôn thay vì kéo nó vào tsconfig — đó là chủ ý: lab không build ra dist.
+    ignores: ['eslint.config.mjs', 'lab/**'],
   },
   eslint.configs.recommended,
   ...tseslint.configs.recommendedTypeChecked,

@@ -150,6 +150,39 @@ Hello World!</code></pre>
 <span class="fn">mkdir</span> -p lab</code></pre>
   </div>
 
+  <div class="callout warn">
+    <div class="ct">⚠️ VS Code sẽ gạch đỏ file trong <code>lab/</code> — và đây là lỗi "đúng"</div>
+    <p>
+      Vừa tạo file <code>.mjs</code> trong <code>lab/</code> là ESLint kêu ngay:
+      <code>Parsing error: ... was not found by the project service</code>.
+      <strong>File của bạn không sai gì cả</strong> — <code>node lab/01-http-tho.mjs</code> vẫn chạy ngon.
+    </p>
+    <p>
+      Nguyên nhân: bộ ESLint mà Nest sinh ra dùng chế độ <em>type-aware</em> — nó bắt buộc mọi file phải
+      nằm trong <code>tsconfig.json</code> để đọc được kiểu. Mà <code>tsconfig.json</code> chỉ gom file
+      TypeScript trong <code>src/</code>, còn <code>lab/</code> là JS thuần cố ý đứng ngoài (nó không build
+      ra <code>dist/</code>, không lên production).
+    </p>
+    <p style="margin-bottom:0">
+      <strong>Cách sửa đúng:</strong> nói với ESLint là bỏ qua <code>lab/</code>, chứ <em>không</em> kéo
+      <code>lab/</code> vào tsconfig. Sửa <code>elearning-api/eslint.config.mjs</code>:
+    </p>
+    <div class="code-block" style="margin-top:10px">
+      <span class="code-label">elearning-api/eslint.config.mjs — sửa dòng ignores</span>
+<pre><code>  {
+    <span class="cmt">// lab/ là thư mục thí nghiệm của Module 1: JS thuần, chạy thẳng bằng `node`,</span>
+    <span class="cmt">// KHÔNG nằm trong tsconfig của API nên type-aware lint không soi được.</span>
+    <span class="cmt">// Bỏ qua luôn thay vì kéo nó vào tsconfig — đó là chủ ý: lab không build ra dist.</span>
+    ignores: [<span class="str">'eslint.config.mjs'</span>, <span class="str">'lab/**'</span>],
+  },</code></pre>
+    </div>
+    <p style="margin-top:10px; margin-bottom:0">
+      Lưu file, gạch đỏ biến mất (nếu chưa, bấm <code>Cmd+Shift+P</code> → <em>ESLint: Restart ESLint Server</em>).
+      <strong>Bài học nghề:</strong> khi công cụ báo lỗi, hỏi <em>"công cụ này đang giả định điều gì?"</em>
+      trước khi sửa code. Ở đây giả định sai là của ESLint, không phải của bạn.
+    </p>
+  </div>
+
   <p>Tạo file <code>lab/01-http-tho.mjs</code> trong editor và dán nội dung sau:</p>
 
   <div class="code-block">
