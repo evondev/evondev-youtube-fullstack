@@ -1,0 +1,397 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Bài 01 · HTTP thực sự là gì — tự viết web server bằng node:http thuần</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="lesson.css">
+</head>
+<body>
+<div class="wrap">
+
+  <span class="lesson-tag">Module 1 · Bài 01</span>
+  <h1>HTTP thực sự là gì — tự viết web server bằng <code>node:http</code> thuần</h1>
+  <p class="subtitle">Không framework, không decorator. 20 dòng code để thấy backend không hề có ma thuật nào.</p>
+  <p class="meta-line">⏱ ~40 phút · 🎯 Mục tiêu: bạn tự gõ tay một HTTP request bằng <code>nc</code> và server trả lời; rồi bạn viết một server <em>của riêng bạn</em> mà <code>curl</code> nói chuyện được.</p>
+
+  <div class="callout bridge">
+    <div class="ct">🌉 Bắc cầu từ cái bạn đã biết</div>
+    <p>
+      Ở Next.js bạn viết <code>await fetch('/api/courses')</code> cả nghìn lần. Bạn biết rõ <em>phía bạn</em>
+      làm gì: gọi hàm, chờ Promise, đọc <code>.json()</code>. Nhưng <strong>phía bên kia sợi dây</strong> —
+      cái đang nghe và trả lời — với bạn nó vẫn là một hộp đen.
+    </p>
+    <p style="margin-bottom:0">
+      Bài này mở hộp đen đó ra. Câu chốt bạn cần mang theo suốt 56 bài còn lại:
+      <strong>một request HTTP chỉ là một đoạn văn bản có quy tắc, và một web server chỉ là một hàm được
+      gọi lại mỗi khi đoạn văn bản đó tới.</strong> Hết. Toàn bộ NestJS là các lớp tiện nghi bọc quanh
+      đúng hai câu này.
+    </p>
+  </div>
+
+  <h2>1. Nhìn tận mắt: HTTP là văn bản, không phải phép thuật</h2>
+  <p>
+    Bật lại API Bài 00 (mở một tab Terminal riêng, để nó chạy suốt bài):
+  </p>
+
+  <div class="code-block">
+    <span class="code-label">bash — tab 1: chạy API Bài 00</span>
+<pre><code><span class="kw">cd</span> ~/Documents/youtube/fullstack/elearning-api
+npm run start</code></pre>
+  </div>
+
+  <p>
+    Mở <strong>tab Terminal thứ hai</strong> và gọi nó bằng <code>curl -v</code>. Cờ <code>-v</code>
+    (verbose) bảo curl in ra <em>nguyên văn</em> những gì nó gửi đi và nhận về:
+  </p>
+
+  <div class="code-block">
+    <span class="code-label">bash — tab 2</span>
+<pre><code><span class="cmt"># -s: tắt thanh tiến trình · -v: in cả request và response thô</span>
+curl -sv http://localhost:3333</code></pre>
+  </div>
+
+  <div class="code-block">
+    <span class="code-label">output THẬT (tôi đã chạy trên máy bạn hôm nay) — dấu &gt; là bạn GỬI, &lt; là server TRẢ</span>
+<pre><code><span class="cmt">&gt; GET / HTTP/1.1</span>
+<span class="cmt">&gt; Host: localhost:3333</span>
+<span class="cmt">&gt; User-Agent: curl/8.7.1</span>
+<span class="cmt">&gt; Accept: */*</span>
+<span class="cmt">&gt;</span>
+&lt; HTTP/1.1 <span class="num">200</span> OK
+&lt; X-Powered-By: Express
+&lt; Content-Type: text/html; charset=utf-8
+&lt; Content-Length: <span class="num">12</span>
+&lt; ETag: W/<span class="str">"c-Lve95gjOVATpfV8EL5X4nxwjKHE"</span>
+&lt; Date: Wed, 05 Aug 2026 12:35:05 GMT
+&lt; Connection: keep-alive
+&lt;
+Hello World!</code></pre>
+  </div>
+
+  <p>Giải phẫu <strong>request</strong> (phần <code>&gt;</code>) — nó luôn có đúng 3 phần:</p>
+
+  <table class="data">
+    <thead><tr><th>Phần</th><th>Trong ví dụ</th><th>Nghĩa là gì</th></tr></thead>
+    <tbody>
+      <tr><td><strong>Dòng đầu</strong> (request line)</td><td><code>GET / HTTP/1.1</code></td><td>Động từ + đường dẫn + phiên bản giao thức. <em>Bắt buộc là dòng đầu tiên.</em></td></tr>
+      <tr><td><strong>Các header</strong></td><td><code>Host:</code>, <code>User-Agent:</code>…</td><td>Cặp <code>Tên: giá trị</code>, mỗi cặp một dòng. Đây là "phong bì" — thông tin <em>về</em> gói tin.</td></tr>
+      <tr><td><strong>Dòng trống</strong></td><td>dòng <code>&gt;</code> rỗng</td><td><span class="nullcell">Quan trọng nhất mà ai cũng bỏ qua</span>: nó đánh dấu "hết header, phần sau là body".</td></tr>
+      <tr><td>Body (tuỳ chọn)</td><td>không có với GET</td><td>Dữ liệu thật. <code>POST</code> mới thường có.</td></tr>
+    </tbody>
+  </table>
+
+  <p>
+    <strong>Response</strong> (phần <code>&lt;</code>) có cấu trúc y hệt, chỉ khác dòng đầu:
+    <code>HTTP/1.1 200 OK</code> — phiên bản + mã trạng thái + mô tả.
+  </p>
+
+  <div class="callout why">
+    <div class="ct">💡 Vì sao phải biết cái này (chứ không phải học thuộc cho vui)</div>
+    <p>
+      Vì <strong>mọi bug mạng bạn sẽ gặp trong 5 năm tới đều nằm ở một trong 4 dòng trên.</strong>
+      CORS hỏng? Thiếu header. Upload 413? <code>Content-Length</code> vượt giới hạn. Client treo?
+      Body không bao giờ kết thúc. Webhook chạy 2 lần? Bên gửi không thấy response nên gửi lại.
+      Khi bạn nhìn HTTP là <em>văn bản đọc được</em>, bạn debug bằng mắt; khi bạn nhìn nó là ma thuật,
+      bạn debug bằng cách đoán.
+    </p>
+  </div>
+
+  <p>
+    Theo <a href="https://www.rfc-editor.org/rfc/rfc9112.html#name-message-format" target="_blank">RFC 9112 §2.1</a>
+    (đặc tả chính thức của HTTP/1.1), một message HTTP đúng là: start-line, rồi các header, rồi
+    <code>CRLF</code> (ký tự xuống dòng kiểu Windows: <code>\r\n</code>), rồi body. Không hơn.
+  </p>
+
+  <h2>2. Thí nghiệm: tự tay gõ một HTTP request</h2>
+  <p>
+    Nếu HTTP chỉ là văn bản, ta phải gửi được nó <em>mà không cần trình duyệt, không cần curl</em>.
+    <code>nc</code> (netcat, có sẵn trên macOS) là công cụ chỉ làm đúng một việc: mở kết nối TCP và
+    đẩy chữ qua đó. Không hề biết HTTP là gì.
+  </p>
+
+  <div class="code-block">
+    <span class="code-label">bash — tab 2 (API Bài 00 vẫn đang chạy ở tab 1)</span>
+<pre><code><span class="cmt"># printf gõ ra đúng văn bản của một request HTTP hợp lệ.</span>
+<span class="cmt">#   \r\n  = xuống dòng kiểu CRLF, đúng chuẩn RFC (dùng \n thôi là sai chuẩn)</span>
+<span class="cmt">#   Host  = header BẮT BUỘC của HTTP/1.1, thiếu là server trả 400</span>
+<span class="cmt">#   \r\n\r\n cuối = dòng trống báo "hết header"</span>
+<span class="cmt"># Rồi ống (|) đẩy nguyên đoạn chữ đó qua kết nối TCP tới cổng 3333.</span>
+<span class="fn">printf</span> <span class="str">'GET / HTTP/1.1\r\nHost: localhost:3333\r\nConnection: close\r\n\r\n'</span> | <span class="fn">nc</span> localhost <span class="num">3333</span></code></pre>
+  </div>
+
+  <p>
+    Server trả lời bạn — dù bạn chưa hề dùng trình duyệt hay thư viện HTTP nào.
+    <strong>Đây là toàn bộ "ma thuật" của web.</strong> Trình duyệt Chrome, hàm <code>fetch()</code>,
+    Postman — tất cả chỉ là những cỗ máy gõ đoạn chữ này giúp bạn.
+  </p>
+
+  <div class="callout tip">
+    <div class="ct">🔎 Thử nghịch cho hiểu sâu (30 giây)</div>
+    <p style="margin-bottom:0">
+      Chạy lại lệnh trên nhưng <strong>xoá header <code>Host</code></strong> đi. Bạn sẽ nhận
+      <code>400 Bad Request</code>. Vì sao? Vì một địa chỉ IP có thể phục vụ hàng trăm website
+      (<em>virtual host</em>) — không có <code>Host</code>, server không biết bạn hỏi website nào.
+      Đó là lý do header này bắt buộc từ HTTP/1.1.
+    </p>
+  </div>
+
+  <h2>3. Giờ tới lượt bạn: viết server không framework</h2>
+  <p>
+    Node có sẵn module <code>http</code> — không cần cài gì. Tạo thư mục <code>lab/</code> trong project
+    (đây là nơi sống của 4 bài "kiến thức nền", tách khỏi <code>src/</code> của API thật):
+  </p>
+
+  <div class="code-block">
+    <span class="code-label">bash — tạo thư mục lab</span>
+<pre><code><span class="kw">cd</span> ~/Documents/youtube/fullstack/elearning-api
+<span class="fn">mkdir</span> -p lab</code></pre>
+  </div>
+
+  <p>Tạo file <code>lab/01-http-tho.mjs</code> trong editor và dán nội dung sau:</p>
+
+  <div class="code-block">
+    <span class="code-label">elearning-api/lab/01-http-tho.mjs</span>
+<pre><code><span class="cmt">// Module http CÓ SẴN trong Node — không cần npm install.</span>
+<span class="cmt">// Tiền tố "node:" nói rõ đây là module lõi, không phải một gói npm trùng tên.</span>
+<span class="kw">import</span> { createServer } <span class="kw">from</span> <span class="str">'node:http'</span>;
+
+<span class="cmt">// createServer nhận MỘT hàm. Node gọi lại hàm này MỖI KHI có một request tới.</span>
+<span class="cmt">//   req = thứ client gửi lên (chỉ đọc)</span>
+<span class="cmt">//   res = cái ống để ta ghi câu trả lời ngược về</span>
+<span class="kw">const</span> server = <span class="fn">createServer</span>((req, res) => {
+  <span class="cmt">// In ra terminal để thấy tận mắt: mỗi request = một lần hàm này chạy.</span>
+  console.<span class="fn">log</span>(<span class="str">`[</span>${<span class="kw">new</span> <span class="fn">Date</span>().<span class="fn">toISOString</span>()}<span class="str">] </span>${req.method}<span class="str"> </span>${req.url}<span class="str">`</span>);
+
+  <span class="cmt">// Dòng đầu của response: mã trạng thái + các header gửi kèm.</span>
+  res.<span class="fn">writeHead</span>(<span class="num">200</span>, { <span class="str">'Content-Type'</span>: <span class="str">'text/plain; charset=utf-8'</span> });
+
+  <span class="cmt">// end() = ghi nốt phần body VÀ đóng response lại.</span>
+  <span class="cmt">// Không gọi end() thì client ngồi đợi tới già — ta sẽ thử ở phần 5.</span>
+  res.<span class="fn">end</span>(<span class="str">'Xin chao tu server tu viet!\n'</span>);
+});
+
+<span class="cmt">// listen() = mở cổng VÀ giữ tiến trình sống. Đây là khác biệt lớn nhất so với</span>
+<span class="cmt">// một script thường: script chạy hết dòng cuối là thoát, còn server thì đứng đó chờ.</span>
+server.<span class="fn">listen</span>(<span class="num">3334</span>, () => {
+  console.<span class="fn">log</span>(<span class="str">'Server dang nghe tai http://localhost:3334'</span>);
+});</code></pre>
+  </div>
+
+  <div class="code-block">
+    <span class="code-label">bash — tab 3: chạy server của bạn</span>
+<pre><code><span class="cmt"># .mjs = file dùng cú pháp ESM (import/export) — Node hiểu ngay, không cần cấu hình.</span>
+node lab/01-http-tho.mjs</code></pre>
+  </div>
+
+  <div class="code-block">
+    <span class="code-label">phải thấy (đã verify với Node v22.18.0)</span>
+<pre><code>Server dang nghe tai http://localhost:3334</code></pre>
+  </div>
+
+  <p>Ở tab 2, gọi thử:</p>
+
+  <div class="code-block">
+    <span class="code-label">bash — tab 2</span>
+<pre><code>curl -sv http://localhost:3334</code></pre>
+  </div>
+
+  <div class="code-block">
+    <span class="code-label">output THẬT (đã verify)</span>
+<pre><code>&lt; HTTP/1.1 <span class="num">200</span> OK
+&lt; Content-Type: text/plain; charset=utf-8
+&lt; Date: Wed, 05 Aug 2026 12:34:09 GMT
+&lt; Connection: keep-alive
+&lt; Keep-Alive: timeout=5
+&lt; Transfer-Encoding: chunked
+&lt;
+Xin chao tu server tu viet!</code></pre>
+  </div>
+
+  <p>
+    Nhìn sang tab 3 — terminal chạy server — bạn sẽ thấy dòng log hiện ra <em>ngay khoảnh khắc</em>
+    bạn gọi. Gọi thêm lần nữa: thêm một dòng. <strong>Đó chính là "vòng đời" của backend</strong>:
+    một tiến trình đứng yên, và mỗi request là một lần hàm của bạn được đánh thức.
+  </p>
+
+  <div class="callout why">
+    <div class="ct">💡 Khác biệt tư duy lớn nhất so với frontend</div>
+    <p style="margin-bottom:0">
+      Component React <em>chết đi sống lại</em> liên tục — re-render, unmount, refresh trang là sạch trơn.
+      Tiến trình server thì <strong>sống hàng tuần liền</strong> và phục vụ hàng triệu request bằng
+      <em>cùng một vùng nhớ</em>. Hệ quả bạn phải khắc cốt ghi tâm: một biến bạn lỡ gán ở request của
+      user A <strong>vẫn còn đó</strong> khi request của user B tới. Cả một lớp bug backend
+      (rò rỉ dữ liệu giữa các user, memory leak, race condition) sinh ra từ đúng sự thật này.
+    </p>
+  </div>
+
+  <h2>4. So sánh: server của bạn vs NestJS</h2>
+  <p>Đặt hai response cạnh nhau — cùng một câu chào, hai bộ header khác nhau:</p>
+
+  <table class="data">
+    <thead><tr><th>Header</th><th>Server của bạn (<code>node:http</code>)</th><th>NestJS ở cổng 3333</th></tr></thead>
+    <tbody>
+      <tr><td><code>X-Powered-By</code></td><td><span class="nullcell">không có</span></td><td><code>Express</code> — Nest chạy trên Express</td></tr>
+      <tr><td><code>Content-Length</code></td><td><span class="nullcell">không có</span></td><td><code>12</code></td></tr>
+      <tr><td><code>Transfer-Encoding</code></td><td><code>chunked</code></td><td><span class="nullcell">không có</span></td></tr>
+      <tr><td><code>ETag</code></td><td><span class="nullcell">không có</span></td><td><code>W/"c-Lve95..."</code> — để cache</td></tr>
+      <tr><td><code>Date</code>, <code>Connection</code></td><td>có</td><td>có</td></tr>
+    </tbody>
+  </table>
+
+  <p>
+    Hai dòng <code>Date</code> và <code>Connection</code> <em>bạn không hề viết</em> mà vẫn có — Node tự
+    thêm, vì RFC yêu cầu. Còn <code>chunked</code> xuất hiện vì lý do rất đời:
+  </p>
+
+  <div class="callout why">
+    <div class="ct">💡 Vì sao của bạn là <code>chunked</code> còn của Nest là <code>Content-Length</code>?</div>
+    <p>
+      Khi <code>writeHead</code> chạy, Node <strong>chưa biết</strong> bạn sắp ghi bao nhiêu byte —
+      bạn có thể ghi tiếp cả trăm lần trước khi <code>end()</code>. Không biết độ dài thì không khai
+      <code>Content-Length</code> được, nên nó dùng <code>Transfer-Encoding: chunked</code>: gửi từng
+      khúc, mỗi khúc kèm độ dài, khúc <code>0</code> báo hết. Chạy lại lệnh <code>nc</code> trỏ vào
+      cổng 3334 bạn sẽ <em>thấy tận mắt</em> con số <code>1c</code> (28 ở hệ 16 = độ dài câu chào) và
+      số <code>0</code> kết thúc.
+    </p>
+    <p style="margin-bottom:0">
+      Express thì gom sẵn cả chuỗi rồi mới gửi nên đo được độ dài → khai <code>Content-Length</code>.
+      <strong>Đánh đổi:</strong> chunked cho phép stream (bắt đầu trả lời trước khi biết kết quả dài bao
+      nhiêu — chính là thứ làm nên hiệu ứng chữ chạy dần của ChatGPT), đổi lại client không biết trước
+      còn bao lâu nữa nên không vẽ được thanh tiến trình.
+    </p>
+  </div>
+
+  <h2>5. Thí nghiệm bắt buộc: quên <code>res.end()</code></h2>
+  <p>
+    Đây là lỗi backend kinh điển, và bạn phải <em>thấy nó bằng mắt một lần</em> thì mới nhớ đời.
+    Ở tab 3, bấm <code>Ctrl+C</code> tắt server, sửa file: <strong>xoá dòng <code>res.end(...)</code></strong>
+    (hoặc comment lại), rồi chạy lại. Ở tab 2:
+  </p>
+
+  <div class="code-block">
+    <span class="code-label">bash — tab 2</span>
+<pre><code><span class="cmt"># --max-time 3: tự bỏ cuộc sau 3 giây, để bạn khỏi ngồi đợi vô tận</span>
+curl -s --max-time <span class="num">3</span> http://localhost:3334; <span class="fn">echo</span> <span class="str">"exit=</span>$?<span class="str">"</span></code></pre>
+  </div>
+
+  <div class="code-block">
+    <span class="code-label">kết quả THẬT (đã verify)</span>
+<pre><code>exit=<span class="num">28</span>   <span class="cmt"># 28 = Operation timeout. Không có lỗi, không có 500. Chỉ là im lặng.</span></code></pre>
+  </div>
+
+  <div class="callout danger">
+    <div class="ct">🚨 Vì sao đây là loại bug đáng sợ nhất</div>
+    <p style="margin-bottom:0">
+      Server <strong>không crash, không báo lỗi, log vẫn xanh</strong> — nó chỉ đơn giản là không bao giờ
+      trả lời. Nhìn từ phía monitoring thì "mọi thứ bình thường", còn user thì thấy trang quay mãi.
+      Tệ hơn: mỗi kết nối treo vẫn <em>chiếm chỗ</em> trong tiến trình; đủ nhiều thì server hết tài
+      nguyên và chết cả cụm. Ghi nhớ luật: <strong>mọi nhánh code trong handler đều phải kết thúc bằng
+      một response</strong>. Bài 12 sẽ cho thấy Nest tự động hoá luật này bằng exception filter ra sao —
+      và vì sao vẫn có cách làm nó trượt.
+    </p>
+  </div>
+
+  <p>Sửa lại <code>res.end(...)</code> như cũ trước khi làm bài tập nhé.</p>
+
+  <h2>6. Bài tập — nộp kết quả thật</h2>
+  <div class="callout tip">
+    <div class="ct">🎯 Đề bài</div>
+    <p>
+      Tạo <code>lab/01-bai-tap.mjs</code>: một server nghe cổng <strong>3336</strong>, đọc
+      <code>req.url</code> và trả về nội dung khác nhau:
+    </p>
+    <ul>
+      <li><code>/</code> → <code>Trang chu</code></li>
+      <li><code>/ping</code> → <code>pong</code></li>
+      <li><code>/echo</code> → một chuỗi ghi lại <em>method và url</em> mà client vừa gọi</li>
+      <li>đường dẫn khác → tuỳ bạn, nhưng phải <strong>luôn có response</strong> (nhớ phần 5!)</li>
+    </ul>
+    <p style="margin-bottom:0">
+      <strong>Nộp cho tôi:</strong> dán output thật của 3 lệnh
+      <code>curl -si http://localhost:3336/</code>, <code>.../ping</code>, <code>.../echo</code>.
+      Tôi sẽ <strong>đọc file bạn viết và chạy lại thật</strong> chứ không chấm theo mô tả.
+    </p>
+  </div>
+
+  <div class="quiz">
+    <h3>🧠 Kiểm tra nhanh (bấm để có phản hồi ngay)</h3>
+
+    <div class="q">Câu 1. Cái gì bắt buộc phải nằm giữa phần header và phần body của một HTTP message?</div>
+    <button class="opt" data-correct="false" data-explain="Không có ký tự đặc biệt nào như vậy trong HTTP. Bạn đang nghĩ tới các định dạng nhị phân có 'magic byte' — HTTP/1.1 thì hoàn toàn là văn bản đọc được.">A. Một ký tự phân cách đặc biệt như <code>--boundary</code></button>
+    <button class="opt" data-correct="true" data-explain="Đúng. Một dòng trống (CRLF rỗng) là ranh giới duy nhất. Nghe tầm thường nhưng đây là gốc rễ của cả một lớp lỗ hổng bảo mật tên là HTTP Response Splitting: nếu bạn nhét dữ liệu người dùng chưa lọc vào header, họ chèn \r\n\r\n vào là tự tay kết thúc header và bịa ra một response giả. Bài 29 sẽ quay lại.">B. Một dòng trống</button>
+    <button class="opt" data-correct="false" data-explain="Content-Length là header cho biết body dài bao nhiêu, và nó vẫn nằm TRONG khối header — không phải ranh giới. Hơn nữa response chunked ở phần 4 còn không có header này mà vẫn hợp lệ.">C. Header <code>Content-Length</code></button>
+    <div class="feedback"></div>
+
+    <div class="q">Câu 2. Server ở phần 3 đang chạy. Bạn mở 3 tab trình duyệt cùng gọi <code>localhost:3334</code>. Điều gì xảy ra?</div>
+    <button class="opt" data-correct="false" data-explain="Không. listen() chỉ chạy MỘT lần lúc khởi động — callback của nó là 'đã mở cổng xong', không phải 'có khách'. Hàm chạy 3 lần là hàm bạn truyền vào createServer.">A. Node chạy lại <code>server.listen()</code> 3 lần</button>
+    <button class="opt" data-correct="true" data-explain="Chuẩn. Một tiến trình, một cổng, một hàm handler — được gọi lại nhiều lần với cặp (req, res) khác nhau mỗi lần. Đây chính là lý do log của bạn hiện thêm dòng mỗi lần gọi. Và cũng chính là lý do biến toàn cục trong file này bị CHIA SẺ giữa mọi user — thứ không bao giờ xảy ra ở React.">B. Cùng một hàm handler chạy 3 lần, mỗi lần nhận một cặp <code>(req, res)</code> riêng</button>
+    <button class="opt" data-correct="false" data-explain="Node không tự sinh tiến trình con. Muốn dùng nhiều CPU core bạn phải chủ động dùng cluster hoặc chạy nhiều instance — Bài 42 sẽ bàn khi nói về hiệu năng. Mặc định: MỘT tiến trình phục vụ tất cả.">C. Node tự tạo 3 tiến trình con để xử lý song song</button>
+    <div class="feedback"></div>
+
+    <div class="q">Câu 3. Bạn gọi <code>res.writeHead(200, ...)</code> rồi sau đó lại muốn đổi thành <code>500</code> vì phát hiện lỗi. Chuyện gì xảy ra?</div>
+    <button class="opt" data-correct="false" data-explain="Không sửa được. Đây là điểm mấu chốt của bài — hãy nghĩ theo hướng: dòng status đã đi qua dây mạng rồi thì có gọi lại được không?">A. Đổi được bình thường, header chỉ gửi đi lúc <code>end()</code></button>
+    <button class="opt" data-correct="true" data-explain="Đúng — và đây là insight quan trọng nhất về thứ tự trong HTTP. writeHead ĐẨY status line + header lên dây ngay lập tức; byte đã đi thì không gọi về được. Node ném lỗi ERR_HTTP_HEADERS_SENT. Hệ quả thực chiến: mọi kiểm tra có thể fail PHẢI làm TRƯỚC khi ghi header. Đó chính là vì sao Nest ép bạn ném exception thay vì tự ghi response giữa chừng — bài 12.">B. Node ném lỗi <code>ERR_HTTP_HEADERS_SENT</code> — header đã lên dây rồi, không lấy lại được</button>
+    <button class="opt" data-correct="false" data-explain="Không có chuyện gửi 2 status. HTTP/1.1 quy định mỗi response đúng một start-line; gửi hai lần là client không parse nổi.">C. Client nhận cả hai status, lấy cái cuối</button>
+    <div class="feedback"></div>
+
+    <div class="q">Câu 4 (dò nền — trả lời thật lòng, tôi dùng để chỉnh lộ trình). Trước bài này, bạn đã từng làm gì?</div>
+    <button class="opt" data-correct="false" data-explain="Ghi nhận. Vậy Bài 02–04 sẽ giữ nguyên nhịp chậm và nhiều thí nghiệm tay như bài này.">A. Chỉ mới dùng <code>fetch</code> ở frontend, chưa viết API route nào</button>
+    <button class="opt" data-correct="false" data-explain="Ghi nhận — nền tốt hơn bạn nghĩ. API route Next.js chính là handler (req, res) y hệt bài này, chỉ khác là Next đã mở cổng giúp bạn. Tôi sẽ tăng độ khó ở Bài 02.">B. Đã viết vài API route trong Next.js (<code>app/api/...</code>)</button>
+    <button class="opt" data-correct="true" data-explain="Nếu đúng vậy thì rất tốt — nhưng đừng vội chủ quan. Nhớ 'biết cú pháp' khác 'biết vì sao'. Cứ báo tôi kết quả 4 câu trên, nếu bạn nắm chắc cả 3 câu đầu, tôi sẽ GỘP Bài 02 và chuyển sang chế độ thử thách (giao đề, bạn tự build, tôi review kiểu senior) thay vì cầm tay chỉ việc.">C. Đã từng tự viết server Node/Express ngoài Next.js</button>
+    <div class="feedback"></div>
+  </div>
+
+  <div class="callout tip">
+    <div class="ct">✅ Bạn vừa đạt được</div>
+    <ul class="checklist">
+      <li>Đọc được một HTTP request/response thô và chỉ ra 4 phần của nó</li>
+      <li>Tự gõ tay một request bằng <code>nc</code> — không cần trình duyệt hay thư viện</li>
+      <li>Viết được web server bằng <code>node:http</code> thuần, không framework</li>
+      <li>Hiểu server là <em>một tiến trình sống lâu</em> + <em>một hàm được gọi lại</em>, khác hẳn component React</li>
+      <li>Thấy tận mắt hậu quả của việc quên <code>res.end()</code> — và vì sao nó nguy hiểm hơn crash</li>
+      <li>Giải thích được vì sao response của bạn là <code>chunked</code> còn của Express là <code>Content-Length</code></li>
+    </ul>
+  </div>
+
+  <h2>7. Câu hỏi tư duy (bắc cầu sang Bài 02)</h2>
+  <p>
+    Server bạn vừa viết trả lời <em>y hệt nhau</em> cho mọi request: <code>GET /</code> hay
+    <code>DELETE /users/9</code> cũng ra một câu chào và một mã <code>200</code>. Rõ ràng là sai.
+  </p>
+  <p>
+    Vậy: <strong>khi client gửi <code>POST</code> kèm một cục JSON, cục JSON đó nằm ở đâu trong
+    <code>req</code>?</strong> Thử <code>console.log(req.body)</code> xem — bạn sẽ nhận
+    <code>undefined</code>. Vì sao Node <em>không</em> đưa sẵn body cho bạn, trong khi nó đã đưa sẵn
+    <code>req.method</code> và <code>req.url</code>? Sự khác biệt giữa hai thứ đó nói lên điều gì về
+    cách dữ liệu đi qua mạng?
+  </p>
+  <p>
+    Trả lời được câu này là bạn hiểu <em>stream</em> — và hiểu luôn vì sao mọi framework backend đều
+    cần một thứ gọi là "body parser".
+  </p>
+
+  <div class="next-box">
+    <div class="nl">→ Bài tiếp theo</div>
+    <div class="nt">Bài 02 · Request &amp; Response: method, status code, header, body</div>
+    <p class="nd">Đọc body đến từng byte bằng tay, tự định tuyến theo method + url, và chọn status code cho đúng thay vì trả 200 cho mọi thứ.</p>
+  </div>
+
+  <div class="navbar">
+    <a href="0000-dung-san-tap.html">← Trước</a>
+    <a href="index.html">🏠 Mục lục</a>
+    <a class="disabled">Sau →</a>
+  </div>
+
+  <p class="try-it">
+    💬 <strong>Tôi là người dạy của bạn.</strong> Nộp output 3 lệnh <code>curl</code> của bài tập +
+    đáp án 4 câu quiz (nhất là câu 4). Tôi sẽ đọc file <code>lab/01-bai-tap.mjs</code> bạn viết, chạy thật,
+    rồi quyết định Bài 02 đi chậm hay chuyển sang chế độ thử thách.
+  </p>
+
+</div>
+<script src="lesson-enhance.js"></script>
+</body>
+</html>
