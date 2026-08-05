@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Cheat-sheet · Docker &amp; Compose thiết yếu</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../lessons/lesson.css">
+</head>
+<body>
+<div class="wrap">
+
+  <span class="lesson-tag">📄 Cheat-sheet · sau Module 0</span>
+  <h1>Docker &amp; Compose — bản tra nhanh</h1>
+  <p class="subtitle">Chỉ những lệnh bạn thật sự dùng khi làm backend. In ra dán cạnh màn hình.</p>
+  <p class="meta-line">🖨 In được (Cmd+P) · Đã kiểm chứng với Docker 28.0.1 + Compose v2.33.1 trên máy bạn.</p>
+
+  <div class="callout bridge">
+    <div class="ct">🌉 Hiểu 3 danh từ này là hiểu hết Docker</div>
+    <ul style="margin-bottom:0">
+      <li><strong>Image</strong> — bản đóng gói bất biến (như file <code>.zip</code> cài đặt). Vd <code>postgres:18-alpine</code>.</li>
+      <li><strong>Container</strong> — một tiến trình đang chạy sinh ra từ image. <em>Xoá đi là mất sạch những gì ghi bên trong.</em></li>
+      <li><strong>Volume</strong> — ổ đĩa do Docker quản lý, gắn vào container. <strong>Đây là thứ duy nhất sống sót khi container chết.</strong></li>
+    </ul>
+  </div>
+
+  <h2>1. Vòng đời hằng ngày (99% thời gian bạn chỉ dùng 4 lệnh này)</h2>
+  <table class="data">
+    <thead><tr><th>Lệnh</th><th>Làm gì</th><th>Khi nào dùng</th></tr></thead>
+    <tbody>
+      <tr><td><code>docker compose up -d</code></td><td>Bật toàn bộ service khai báo trong <code>docker-compose.yml</code>, chạy nền</td><td>Mỗi lần khởi động máy / bắt đầu code</td></tr>
+      <tr><td><code>docker compose ps</code></td><td>Liệt kê service đang chạy + trạng thái <code>healthy</code> + cổng</td><td>Đầu tiên khi "sao app không nối được DB?"</td></tr>
+      <tr><td><code>docker compose logs -f postgres</code></td><td>Xem log, <code>-f</code> = bám theo liên tục</td><td>Container chết / crash-loop</td></tr>
+      <tr><td><code>docker compose down</code></td><td>Tắt &amp; xoá container, <strong>GIỮ volume</strong></td><td>Xong việc, muốn máy nhẹ</td></tr>
+    </tbody>
+  </table>
+
+  <div class="callout danger">
+    <div class="ct">🚨 Một cờ đổi đời</div>
+    <p style="margin-bottom:0">
+      <code>docker compose down <strong>-v</strong></code> xoá luôn <strong>volume</strong> — tức toàn bộ database.
+      Ở máy dev đây là nút "làm lại từ đầu". Trên server production đây là <span class="nullcell">mất sạch dữ liệu
+      khách hàng</span>, không có Ctrl+Z. Trước khi gõ <code>-v</code>, luôn kiểm lại đang ở terminal nào.
+    </p>
+  </div>
+
+  <h2>2. Sự thật "Up ≠ sẵn sàng"</h2>
+  <p>
+    <code>STATUS: Up 2 seconds</code> chỉ nói tiến trình đã khởi động, <strong>không</strong> nói database đã
+    nhận kết nối được. Khoảng chênh vài giây đó chính là chỗ app crash lúc khởi động.
+    <code>healthcheck</code> trong compose là cách trả lời câu hỏi "sẵn sàng CHƯA?" bằng máy móc:
+  </p>
+  <div class="code-block">
+    <span class="code-label">docker-compose.yml — mẫu đã chạy thật</span>
+<pre><code><span class="tbl">healthcheck</span>:
+  <span class="cmt"># Docker tự gõ lệnh này trong container; exit code 0 = khoẻ</span>
+  <span class="tbl">test</span>: [<span class="str">'CMD-SHELL'</span>, <span class="str">'pg_isready -U elearning -d elearning'</span>]
+  <span class="tbl">interval</span>: <span class="num">5s</span>   <span class="cmt"># bao lâu hỏi lại một lần</span>
+  <span class="tbl">timeout</span>: <span class="num">5s</span>    <span class="cmt"># hỏi quá lâu không đáp thì coi như trượt</span>
+  <span class="tbl">retries</span>: <span class="num">10</span>    <span class="cmt"># trượt liên tiếp 10 lần mới gắn cờ unhealthy</span></code></pre>
+  </div>
+
+  <h2>3. Chui vào bên trong container</h2>
+  <div class="code-block">
+    <span class="code-label">bash</span>
+<pre><code><span class="cmt"># Mở shell trong container đang chạy. -it = interactive + cấp terminal</span>
+docker compose <span class="fn">exec</span> postgres sh
+
+<span class="cmt"># Vào thẳng psql của DB dự án (khỏi cần cài client trên máy)</span>
+docker compose <span class="fn">exec</span> postgres psql -U elearning -d elearning
+
+<span class="cmt"># Gõ lệnh redis mà không cần vào shell</span>
+docker compose <span class="fn">exec</span> redis redis-cli ping   <span class="cmt"># → PONG</span>
+
+<span class="cmt"># Nối từ MÁY BẠN vào (nhớ cổng đã map: 5433 chứ không phải 5432)</span>
+psql -h localhost -p <span class="num">5433</span> -U elearning -d elearning</code></pre>
+  </div>
+
+  <div class="callout why">
+    <div class="ct">💡 Vì sao bên trong là 5432 mà bên ngoài là 5433?</div>
+    <p style="margin-bottom:0">
+      Dòng <code>'5433:5432'</code> đọc là <strong>cổng-trên-máy-bạn : cổng-trong-container</strong>.
+      Bên trong container Postgres vẫn nghe 5432 như mọi khi; ta chỉ đổi cửa <em>bên ngoài</em> vì
+      5432 trên máy bạn đã bị Postgres Homebrew chiếm. Hệ quả cần nhớ:
+      <strong>app chạy trên máy bạn</strong> nối qua <code>localhost:5433</code>, còn
+      <strong>một container khác trong cùng compose</strong> lại nối qua <code>postgres:5432</code>
+      (tên service, cổng trong) — nhầm hai cái này là lỗi kinh điển lúc đưa app vào Docker ở Bài 46.
+    </p>
+  </div>
+
+  <h2>4. Khi có sự cố — thứ tự chẩn đoán</h2>
+  <table class="data">
+    <thead><tr><th>#</th><th>Lệnh</th><th>Đang tìm gì</th></tr></thead>
+    <tbody>
+      <tr><td>1</td><td><code>docker compose ps</code></td><td>Nó có chạy không? Có <code>healthy</code> không? Cổng map đúng chưa?</td></tr>
+      <tr><td>2</td><td><code>docker compose logs --tail=50 &lt;service&gt;</code></td><td>Dòng lỗi cuối cùng trước khi chết</td></tr>
+      <tr><td>3</td><td><code>docker compose restart &lt;service&gt;</code></td><td>Chỉ khởi động lại tiến trình, <strong>không đụng dữ liệu</strong></td></tr>
+      <tr><td>4</td><td><code>lsof -i :5433</code></td><td>Cổng có bị tiến trình khác chiếm không (lỗi bind/EADDRINUSE)</td></tr>
+      <tr><td>5</td><td><code>docker compose down &amp;&amp; docker compose up -d</code></td><td>Dựng lại container từ đầu, dữ liệu vẫn còn</td></tr>
+    </tbody>
+  </table>
+
+  <h2>5. Dọn dẹp (Docker ăn ổ cứng rất khoẻ)</h2>
+  <div class="code-block">
+    <span class="code-label">bash</span>
+<pre><code><span class="cmt"># Xem Docker đang chiếm bao nhiêu GB và ở đâu</span>
+docker system df
+
+<span class="cmt"># Dọn image/container/network KHÔNG còn dùng. An toàn với volume.</span>
+docker system prune
+
+<span class="cmt"># ⚠️ Thêm --volumes là xoá cả volume mồ côi — có thể là DB của project khác!</span>
+docker system prune --volumes
+
+<span class="cmt"># Liệt kê volume để biết mình sắp xoá cái gì (LÀM TRƯỚC khi prune)</span>
+docker volume ls</code></pre>
+  </div>
+
+  <h2>6. Bẫy đã cắn thật trong khoá này</h2>
+  <div class="callout warn">
+    <div class="ct">⚠️ <code>postgres:18</code> đổi chỗ gắn volume</div>
+    <p style="margin-bottom:0">
+      Mọi tutorial cũ dạy gắn <code>/var/lib/postgresql/<strong>data</strong></code>. Từ Postgres 18,
+      <code>PGDATA</code> là <code>/var/lib/postgresql/18/docker</code> → gắn theo đường cũ thì container
+      <strong>crash-loop</strong>. Đúng phải là <code>postgres-data:/var/lib/postgresql</code>.
+      Bài học tổng quát cho cả khoá: <strong>đọc docs của đúng phiên bản bạn đang dùng</strong>, đừng
+      copy tutorial 3 năm trước.
+    </p>
+  </div>
+
+  <p>
+    Nguồn chính chủ: <a href="https://docs.docker.com/reference/cli/docker/compose/" target="_blank">Docker Compose CLI reference</a> ·
+    <a href="https://hub.docker.com/_/postgres" target="_blank">Postgres official image</a> ·
+    <a href="https://docs.docker.com/reference/compose-file/services/#healthcheck" target="_blank">Compose healthcheck spec</a>
+  </p>
+
+  <div class="navbar">
+    <a href="../lessons/0000-dung-san-tap.html">← Bài 00</a>
+    <a href="../lessons/index.html">🏠 Mục lục</a>
+    <a href="../lessons/0001-http-that-su-la-gi.html">Bài 01 →</a>
+  </div>
+
+</div>
+<script src="../lessons/lesson-enhance.js"></script>
+</body>
+</html>

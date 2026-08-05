@@ -1,0 +1,48 @@
+# File này mô tả HẠ TẦNG của project dưới dạng code.
+# Ai clone repo về cũng dựng được y hệt môi trường của bạn bằng 1 lệnh.
+services:
+  postgres:
+    # alpine = bản Linux siêu nhẹ (~80MB thay vì ~400MB)
+    image: postgres:18-alpine
+    container_name: elearning-postgres
+    # Tự bật lại khi Docker Desktop khởi động, trừ khi bạn chủ động stop
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: elearning
+      POSTGRES_PASSWORD: elearning_dev_pw
+      POSTGRES_DB: elearning
+    ports:
+      # "5433:5432" = cổng-trên-máy-bạn : cổng-bên-trong-container.
+      # Dùng 5433 vì 5432 đang bị Postgres Homebrew của bạn giữ.
+      - '5433:5432'
+    volumes:
+      # ⚠️ Postgres 18 gắn volume ở /var/lib/postgresql — KHÔNG phải /data (xem cảnh báo dưới)
+      - postgres-data:/var/lib/postgresql
+    healthcheck:
+      # Docker tự gõ lệnh này để biết DB đã SẴN SÀNG NHẬN KẾT NỐI chưa.
+      # "container đang chạy" KHÁC "database sẵn sàng" — nhầm chỗ này là app crash lúc khởi động.
+      test: ['CMD-SHELL', 'pg_isready -U elearning -d elearning']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:8-alpine
+    container_name: elearning-redis
+    restart: unless-stopped
+    ports:
+      # 6380 thay vì 6379 mặc định, cho đồng bộ với quy ước "+1" ở trên
+      - '6380:6379'
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+# Volume = ổ đĩa ảo do Docker quản lý. Đây là thứ giữ dữ liệu SỐNG SÓT
+# khi container bị xoá. Không có nó, `docker compose down` là mất sạch DB.
+volumes:
+  postgres-data:
+  redis-data:

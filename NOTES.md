@@ -80,14 +80,17 @@ Cách đếm: số file trong `reference/` so với số bài trong `lessons/`.
 
 | Mốc | Trạng thái |
 |---|---|
-| Bài đã soạn | 1 (Bài 00) |
-| Cheat-sheet đã có | 0 |
-| **Trigger kế tiếp** | **Ngay khi Tuấn xác nhận xong Bài 00** → Module 0 hoàn tất → soạn `reference/docker-lenh-thiet-yeu.html` |
-| Trigger sau đó | Bài 05 (đủ 5 bài kể từ cheat-sheet đầu) |
+| Bài đã soạn | 2 (Bài 00, Bài 01) |
+| Cheat-sheet đã có | 1 — `reference/docker-lenh-thiet-yeu.html` (soạn 2026-08-05, khi Module 0 xong) |
+| **Trigger kế tiếp** | **Bài 05** (đủ 5 bài kể từ cheat-sheet gần nhất) — hoặc sớm hơn nếu Module 1 xong trước |
 
 ## Việc cần làm / theo dõi
 
-- [ ] Hỏi Tuấn có muốn `git init` workspace này không (để commit theo bài).
-- [ ] Bài 01: quiz dò lại trình độ thật về HTTP/Node — điều chỉnh lộ trình theo kết quả.
+- [x] `git init` — đã làm, branch `main`. Chưa có remote → chỉ commit, chưa push.
+- [ ] **Chờ kết quả câu quiz 4 của Bài 01** (dò nền HTTP/Node). Nếu Tuấn chọn C (đã từng tự viết server
+      Node/Express) VÀ đúng cả 3 câu đầu → **gộp Bài 02 vào Bài 03 và bật chế độ thử thách** (rule A12/A20).
+      Nếu chọn A → giữ nguyên nhịp chậm, nhiều thí nghiệm tay.
+- [ ] Chấm bài tập `elearning-api/lab/01-bai-tap.mjs` bằng cách đọc file + chạy thật (rule A18), soi kỹ
+      nhánh nào thiếu response.
 - [ ] Khi tới Module 5 (thanh toán): hỏi Tuấn muốn Stripe (khách quốc tế/remote) hay VNPay/MoMo
       (khách VN) — ảnh hưởng lớn tới bài webhook.
