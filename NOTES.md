@@ -41,8 +41,10 @@ Trên máy có container `my-nest-app-db-1` (postgres:16) và `goclaw-postgres-1
 → Giữ nguyên lộ trình 57 bài, **không rút gọn Module 1**. Xem `learning-records/0001`.
 
 **Lộ trình đã chốt:** Tuấn chọn "chốt như vậy, bắt đầu luôn" — không đổi thứ tự, không rút gọn.
-**Git:** đã `git init` (branch `main`), Tuấn đồng ý commit theo từng bài. Chưa có remote → chỉ commit,
-chưa push.
+**Git:** đã `git init` (branch `main`), remote `origin` =
+https://github.com/evondev/evondev-youtube-fullstack.git.
+⚠️ **Rule Tuấn chốt 2026-08-05:** phải **commit VÀ push xong bài trước rồi mới được soạn bài mới** —
+mỗi bài một commit riêng, một lần push riêng, không dồn.
 
 ## Kết quả verify Bài 00 (chạy thật, 2026-08-03)
 
