@@ -27,3 +27,25 @@ _Avoid_: ping, kiểm tra sống
 
 > Làm rõ: trong khoá này, **"Up"** luôn nghĩa là container đang chạy, còn **"healthy"** nghĩa là dịch vụ
 > bên trong đã sẵn sàng. Hai thứ này không bao giờ được dùng thay nhau.
+
+## HTTP & vòng đời request (từ Bài 01)
+
+**Handler**:
+Hàm được truyền vào `createServer`, do Node gọi lại **mỗi khi** có một request tới; nhận cặp `(request, response)` riêng cho từng request.
+_Avoid_: hàm xử lý, controller (controller là khái niệm của Nest ở Module 2, không dùng lẫn ở đây)
+
+**Kết thúc response**:
+Hành động gọi `response.end()` — vừa ghi nốt body vừa đóng response lại. **Mọi nhánh code trong handler đều phải kết thúc response**; không kết thúc thì client treo, server vẫn "xanh".
+_Avoid_: trả về, return (return trong JS không hề kết thúc response)
+
+**Request line**:
+Dòng đầu tiên của một HTTP request: `<method> <đường-dẫn> <phiên-bản>`, ví dụ `GET /ping HTTP/1.1`.
+_Avoid_: dòng header đầu tiên
+
+**`request.url`**:
+Chuỗi nguyên văn của đường dẫn **kèm cả query string** (`/ping?a=1`), không phải "route đã được phân giải".
+_Avoid_: route, path (path chỉ là phần trước dấu `?`)
+
+**Transfer-Encoding: chunked**:
+Cách gửi body theo từng khúc kèm độ dài mỗi khúc, dùng khi server chưa biết trước tổng độ dài — đánh đổi: stream được nhưng client không biết còn bao lâu nữa.
+_Avoid_: nén, chia nhỏ gói tin
