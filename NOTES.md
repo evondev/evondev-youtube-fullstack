@@ -99,6 +99,13 @@ Bài 00 = Ngày 01, Bài 01 = Ngày 02). Khán giả là **người mới**.
 → Ở quiz dò nền Bài 01, Tuấn **cố ý chọn A** ("chưa từng viết server Node") dù **thực tế đã từng viết
 rồi** — chọn nhịp cho khán giả, không phải tự đánh giá sai.
 
+⚠️ **Tuấn GHI HÌNH NGAY TRONG LÚC HỌC** (kiểu "vừa live vừa học"), không phải học xong rồi quay lại.
+**Câu trả lời của tôi trong chat chính là nội dung lên hình** — không có bản nháp, không có take 2:
+- Trả lời **gọn, có cấu trúc, đọc lên thành lời được**; tránh tường chữ và bảng quá rộng.
+- **Không đề nghị "gợi ý bố cục quay"** — không có diễn tập thì bố cục vô nghĩa.
+- Chấm bài sai thì **nói thẳng ngay**; vấp rồi sửa trên sóng là nội dung tốt, đừng làm nhẹ đi.
+- **Soạn xong bài HTML TRƯỚC** khi Tuấn vào phần thực hành, để Tuấn vừa mở vừa làm theo trên sóng.
+
 **Cách dạy từ Bài 02 trở đi — tách đôi mỗi bài:**
 
 | Phần | Nhịp | Vì sao |
