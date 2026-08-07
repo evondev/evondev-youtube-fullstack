@@ -89,10 +89,28 @@ Cách đếm: số file trong `reference/` so với số bài trong `lessons/`.
 ## Việc cần làm / theo dõi
 
 - [x] `git init` — đã làm, branch `main`. Chưa có remote → chỉ commit, chưa push.
-- [ ] **Chờ kết quả câu quiz 4 của Bài 01** (dò nền HTTP/Node). Nếu Tuấn chọn C (đã từng tự viết server
-      Node/Express) VÀ đúng cả 3 câu đầu → **gộp Bài 02 vào Bài 03 và bật chế độ thử thách** (rule A12/A20).
-      Nếu chọn A → giữ nguyên nhịp chậm, nhiều thí nghiệm tay.
-- [ ] Chấm bài tập `elearning-api/lab/01-bai-tap.mjs` bằng cách đọc file + chạy thật (rule A18), soi kỹ
-      nhánh nào thiếu response.
+- [x] Chấm bài tập Bài 01 — đạt sau 1 lần revise. Xem `learning-records/0003`.
+
+## 🎥 QUAN TRỌNG — khoá này là series YouTube (rõ 2026-08-05)
+
+Tuấn **quay khoá này thành series "Từ Frontend Đến Fullstack Cùng AI trong 60 ngày"** (1 bài = 1 tập;
+Bài 00 = Ngày 01, Bài 01 = Ngày 02). Khán giả là **người mới**.
+
+→ Ở quiz dò nền Bài 01, Tuấn **cố ý chọn A** ("chưa từng viết server Node") dù **thực tế đã từng viết
+rồi** — chọn nhịp cho khán giả, không phải tự đánh giá sai.
+
+**Cách dạy từ Bài 02 trở đi — tách đôi mỗi bài:**
+
+| Phần | Nhịp | Vì sao |
+|---|---|---|
+| **Nội dung bài (lên hình)** | Trình độ **người mới**: từng bước đánh số, không nhảy cóc, giải thích cả thứ "ai cũng biết", mọi lệnh copy-paste được | Khán giả phải làm theo được |
+| **Phần riêng cho Tuấn** | Nâng độ khó ở **tự kiểm chứng / tự nghĩ ca test** — KHÔNG nâng ở cú pháp | Đó mới là chỗ Tuấn thật sự vấp (record 0003), cú pháp thì Tuấn không vấp |
+
+**Hệ quả:** KHÔNG bật chế độ thử thách kiểu "tự build từ đầu" — nó phá format quay. Thay vào đó ép
+Tuấn **giải thích được VÌ SAO ở mức đủ để lên hình dạy lại người khác**; đó là thử thách đúng tầm và
+đúng thứ series cần.
+
+**Thêm vào mỗi bài từ Bài 02:** một mục lường trước **câu hỏi khán giả sẽ hỏi trong comment** — vừa
+giúp Tuấn chủ động khi quay, vừa là cách ép Tuấn kiểm tra mình hiểu tới đâu.
 - [ ] Khi tới Module 5 (thanh toán): hỏi Tuấn muốn Stripe (khách quốc tế/remote) hay VNPay/MoMo
       (khách VN) — ảnh hưởng lớn tới bài webhook.
