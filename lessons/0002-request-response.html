@@ -1,0 +1,578 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Bài 02 · Request &amp; Response: method, status code, header, body</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="lesson.css">
+</head>
+<body>
+<div class="wrap">
+
+  <span class="lesson-tag">Module 1 · Bài 02</span>
+  <h1>Request &amp; Response: method, status code, header, body</h1>
+  <p class="subtitle">Bài 01 server trả <code>200</code> cho mọi thứ. Bài này nó biết mình đang trả lời <em>ai</em>, <em>cái gì</em>, và <em>vì sao</em>.</p>
+  <p class="meta-line">⏱ ~40 phút · 🎯 Mục tiêu: đọc được body của một <code>POST</code> đến từng khúc, định tuyến theo <code>method + đường dẫn</code>, và trả đúng mã trạng thái thay vì <code>200</code> cho tất cả.</p>
+
+  <div class="callout bridge">
+    <div class="ct">🌉 Bắc cầu từ Bài 01</div>
+    <p>
+      Cuối Bài 01 tôi hỏi: <em>khi client gửi <code>POST</code> kèm một cục JSON, cục JSON đó nằm ở đâu
+      trong <code>request</code>?</em> Bạn thử <code>console.log(request.body)</code> và nhận
+      <code>undefined</code>.
+    </p>
+    <p>
+      Bài này trả lời câu đó. Và trả lời luôn một thứ khác: ở bài tập Bài 01, server của bạn gọi
+      <code>/</code> thì ra <code>Trang chu</code>, nhưng gọi <code>/?q=1</code> lại ra
+      <code>Nothing</code>. Không phải bạn gõ nhầm — <strong>bạn đã tin vào một thứ nói dối</strong>.
+    </p>
+    <p style="margin-bottom:0">
+      Câu chốt mang theo cả bài: <strong>một handler đúng đắn làm đúng 2 việc — phân giải request cho
+      đúng (method + đường dẫn + body), rồi trả lời có chủ đích (status + header + body).</strong>
+      Bài 01 bạn mới làm được nửa sau, và làm sai.
+    </p>
+  </div>
+
+  <h2>1. <code>request.url</code> nói dối — nó không phải đường dẫn</h2>
+
+  <p>
+    Ở Bài 01 bạn viết <code>if (request.url === '/')</code>. Nghe rất hợp lý. Nhưng hãy nhìn lại cái tên:
+    nó là <strong>url</strong>, không phải <strong>path</strong>. Và theo
+    <a href="https://nodejs.org/docs/latest-v22.x/api/http.html#messageurl" target="_blank">docs Node về <code>message.url</code></a>,
+    nó chứa <em>"chỉ phần URL có mặt trong request HTTP thật"</em> — tức là <strong>nguyên văn, dính cả
+    query string</strong>.
+  </p>
+
+  <p>Mở terminal và tự chứng minh, không cần server nào:</p>
+
+  <div class="code-block">
+    <span class="code-label">bash — chạy thẳng, không cần file</span>
+<pre><code>node -e <span class="str">"console.log('/courses?level=co-ban' === '/courses')"</span></code></pre>
+  </div>
+
+  <div class="code-block">
+    <span class="code-label">kết quả THẬT (Node v22.18.0)</span>
+<pre><code><span class="kw">false</span></code></pre>
+  </div>
+
+  <p>
+    Đó chính xác là con bug ở bài tập Bài 01. Chuỗi <code>'/ping?a=1'</code> không bao giờ bằng
+    <code>'/ping'</code>, nên request rơi tuột xuống nhánh mặc định.
+  </p>
+
+  <div class="callout why">
+    <div class="ct">💡 Vì sao Node không tự tách sẵn cho bạn?</div>
+    <p style="margin-bottom:0">
+      Vì <code>node:http</code> cố ý dừng ở mức <strong>giao thức</strong>, không leo lên mức
+      <strong>ứng dụng</strong>. Nó đưa bạn đúng những byte đã đi qua dây, không diễn giải hộ. Diễn giải
+      là việc của tầng trên — và đó chính là cái Express/NestJS làm giúp bạn. <em>Mỗi tiện nghi bạn dùng
+      sau này đều là một việc ai đó đã làm ở đây; bạn đang học chính cái việc đó.</em>
+    </p>
+  </div>
+
+  <p>
+    Cách tách đúng là <code>new URL()</code> — chuẩn web, có sẵn trong Node, <strong>chính docs Node
+    khuyến nghị dùng</strong>. Nó cần một "gốc" (domain) vì <code>request.url</code> không có domain,
+    nên ta ghép tạm từ header <code>Host</code>:
+  </p>
+
+  <div class="code-block">
+    <span class="code-label">bash — thử ngay</span>
+<pre><code>node -e <span class="str">"
+const url = new URL('/courses?level=co-ban&page=2', 'http://localhost:3337');
+console.log('pathname     :', url.pathname);
+console.log('level        :', url.searchParams.get('level'));
+console.log('page         :', url.searchParams.get('page'));
+console.log('tham so thieu:', url.searchParams.get('khong-co'));
+"</span></code></pre>
+  </div>
+
+  <div class="code-block">
+    <span class="code-label">kết quả THẬT (đã verify)</span>
+<pre><code>pathname     : /courses
+level        : co-ban
+page         : <span class="num">2</span>
+tham so thieu: <span class="kw">null</span></code></pre>
+  </div>
+
+  <div class="callout tip">
+    <div class="ct">🔎 Để ý cái dòng cuối</div>
+    <p style="margin-bottom:0">
+      Tham số không tồn tại trả về <code>null</code>, <strong>không phải</strong>
+      <code>undefined</code> và <strong>không</strong> ném lỗi. Nhớ kỹ: ở backend, mọi thứ đến từ client
+      đều là <em>tuỳ chọn cho tới khi bạn tự bắt buộc nó</em>. Người dùng thật sẽ gọi API của bạn thiếu
+      tham số, thừa tham số, sai kiểu — và họ không hề cố ý phá bạn.
+    </p>
+  </div>
+
+  <h2>2. Định tuyến thật = <code>method</code> + đường dẫn</h2>
+
+  <p>
+    Bài 01 bạn chỉ nhìn đường dẫn. Nhưng <code>GET /courses</code> (xem danh sách) và
+    <code>POST /courses</code> (tạo mới) là <strong>hai việc hoàn toàn khác nhau ở cùng một đường dẫn</strong>.
+    Đó là bản chất của REST: <em>đường dẫn nói "cái gì", method nói "làm gì với nó"</em>.
+  </p>
+
+  <p>Tạo file <code>lab/02-request-response.mjs</code> trong editor và dán nội dung dưới đây. Đây là file chính của cả bài — ta sẽ mổ từng phần ngay sau:</p>
+
+  <div class="code-block">
+    <span class="code-label">elearning-api/lab/02-request-response.mjs</span>
+<pre><code><span class="kw">import</span> { createServer } <span class="kw">from</span> <span class="str">'node:http'</span>;
+
+<span class="cmt">// Handler là async vì phần đọc body ở dưới cần `await`.</span>
+<span class="kw">const</span> server = <span class="fn">createServer</span>(<span class="kw">async</span> (request, response) => {
+  <span class="cmt">// request.url là CHUỖI THÔ, dính cả query string ('/courses?level=co-ban').</span>
+  <span class="cmt">// new URL() tách nó ra thành pathname + searchParams cho ta.</span>
+  <span class="cmt">// Tham số thứ 2 là "gốc" bắt buộc, vì request.url không có domain.</span>
+  <span class="kw">const</span> url = <span class="kw">new</span> <span class="fn">URL</span>(request.url, <span class="str">`http://</span>${request.headers.host}<span class="str">`</span>);
+  <span class="kw">const</span> pathname = url.pathname;
+  <span class="kw">const</span> method = request.method;
+
+  console.<span class="fn">log</span>(<span class="str">`</span>${method}<span class="str"> </span>${pathname}<span class="str">`</span>);
+
+  <span class="cmt">// ── Route 1: GET /ping ─────────────────────────────────</span>
+  <span class="kw">if</span> (method === <span class="str">'GET'</span> &amp;&amp; pathname === <span class="str">'/ping'</span>) {
+    response.<span class="fn">writeHead</span>(<span class="num">200</span>, { <span class="str">'Content-Type'</span>: <span class="str">'text/plain; charset=utf-8'</span> });
+    <span class="kw">return</span> response.<span class="fn">end</span>(<span class="str">'pong'</span>);
+  }
+
+  <span class="cmt">// ── Route 2: GET /courses?level=... ────────────────────</span>
+  <span class="kw">if</span> (method === <span class="str">'GET'</span> &amp;&amp; pathname === <span class="str">'/courses'</span>) {
+    <span class="cmt">// ?? 'tat-ca' = giá trị mặc định khi client không gửi tham số.</span>
+    <span class="kw">const</span> level = url.searchParams.<span class="fn">get</span>(<span class="str">'level'</span>) ?? <span class="str">'tat-ca'</span>;
+    response.<span class="fn">writeHead</span>(<span class="num">200</span>, { <span class="str">'Content-Type'</span>: <span class="str">'application/json; charset=utf-8'</span> });
+    <span class="kw">return</span> response.<span class="fn">end</span>(<span class="fn">JSON.stringify</span>({ level, items: [] }));
+  }
+
+  <span class="cmt">// ── Route 3: POST /courses — đọc body ──────────────────</span>
+  <span class="kw">if</span> (method === <span class="str">'POST'</span> &amp;&amp; pathname === <span class="str">'/courses'</span>) {
+    <span class="cmt">// request LÀ một stream: dữ liệu tới theo từng khúc, không có sẵn.</span>
+    <span class="kw">let</span> raw = <span class="str">''</span>;
+    <span class="kw">for await</span> (<span class="kw">const</span> chunk <span class="kw">of</span> request) {
+      raw += chunk;
+    }
+
+    <span class="kw">let</span> data;
+    <span class="kw">try</span> {
+      data = <span class="fn">JSON.parse</span>(raw);
+    } <span class="kw">catch</span> {
+      <span class="cmt">// Client gửi rác → lỗi của CLIENT → 400, không phải 500.</span>
+      response.<span class="fn">writeHead</span>(<span class="num">400</span>, { <span class="str">'Content-Type'</span>: <span class="str">'application/json; charset=utf-8'</span> });
+      <span class="kw">return</span> response.<span class="fn">end</span>(<span class="fn">JSON.stringify</span>({ error: <span class="str">'Body không phải JSON hợp lệ'</span> }));
+    }
+
+    <span class="kw">if</span> (!data.title) {
+      response.<span class="fn">writeHead</span>(<span class="num">400</span>, { <span class="str">'Content-Type'</span>: <span class="str">'application/json; charset=utf-8'</span> });
+      <span class="kw">return</span> response.<span class="fn">end</span>(<span class="fn">JSON.stringify</span>({ error: <span class="str">'Thiếu trường title'</span> }));
+    }
+
+    <span class="cmt">// 201 = "đã tạo ra tài nguyên mới". Location chỉ tới nơi nó vừa sinh ra.</span>
+    response.<span class="fn">writeHead</span>(<span class="num">201</span>, {
+      <span class="str">'Content-Type'</span>: <span class="str">'application/json; charset=utf-8'</span>,
+      Location: <span class="str">'/courses/1'</span>,
+    });
+    <span class="kw">return</span> response.<span class="fn">end</span>(<span class="fn">JSON.stringify</span>({ id: <span class="num">1</span>, title: data.title }));
+  }
+
+  <span class="cmt">// ── Đúng đường dẫn nhưng sai method → 405 ──────────────</span>
+  <span class="cmt">// Chú ý: nhánh này nằm SAU cùng của nhóm /courses, nên chỉ chạy khi</span>
+  <span class="cmt">// đường dẫn khớp mà không method nào ở trên nhận.</span>
+  <span class="kw">if</span> (pathname === <span class="str">'/courses'</span>) {
+    response.<span class="fn">writeHead</span>(<span class="num">405</span>, {
+      <span class="str">'Content-Type'</span>: <span class="str">'application/json; charset=utf-8'</span>,
+      <span class="cmt">// RFC BẮT BUỘC có header Allow trong response 405.</span>
+      Allow: <span class="str">'GET, POST'</span>,
+    });
+    <span class="kw">return</span> response.<span class="fn">end</span>(<span class="fn">JSON.stringify</span>({ error: <span class="str">`Method </span>${method}<span class="str"> không dùng được ở đây`</span> }));
+  }
+
+  <span class="cmt">// ── Không khớp gì cả → 404 ─────────────────────────────</span>
+  <span class="cmt">// Nhánh này là "lưới an toàn": mọi request lọt tới đây đều CÓ response.</span>
+  response.<span class="fn">writeHead</span>(<span class="num">404</span>, { <span class="str">'Content-Type'</span>: <span class="str">'application/json; charset=utf-8'</span> });
+  response.<span class="fn">end</span>(<span class="fn">JSON.stringify</span>({ error: <span class="str">'Không tìm thấy'</span> }));
+});
+
+server.<span class="fn">listen</span>(<span class="num">3337</span>, () => {
+  console.<span class="fn">log</span>(<span class="str">'Server dang nghe tai http://localhost:3337'</span>);
+});</code></pre>
+  </div>
+
+  <div class="code-block">
+    <span class="code-label">bash — tab 1: chạy server</span>
+<pre><code><span class="kw">cd</span> ~/Documents/youtube/fullstack/elearning-api
+node lab/02-request-response.mjs</code></pre>
+  </div>
+
+  <div class="code-block">
+    <span class="code-label">phải thấy</span>
+<pre><code>Server dang nghe tai http://localhost:3337</code></pre>
+  </div>
+
+  <h2>3. Body là một <em>dòng chảy</em>, không phải một biến</h2>
+
+  <p>
+    Đây là câu trả lời cho câu hỏi tư duy Bài 01. Vì sao Node đưa sẵn <code>request.method</code> và
+    <code>request.url</code> mà <em>không</em> đưa sẵn <code>request.body</code>?
+  </p>
+
+  <p>
+    Nhớ lại giải phẫu HTTP ở Bài 01: <strong>request line và header đi tới TRƯỚC, body đi tới SAU</strong>.
+    Khi Node gọi handler của bạn, nó mới chỉ đọc xong phần đầu — body có thể còn đang trên đường, có thể
+    là 20 byte, cũng có thể là một file 2GB. <strong>Node không dám đợi cho đủ rồi mới gọi bạn</strong>,
+    vì như thế một người upload file lớn sẽ giam server lại.
+  </p>
+
+  <p>
+    Nên nó đưa bạn <em>cái vòi</em> thay vì <em>cái xô</em>. Theo
+    <a href="https://nodejs.org/docs/latest-v22.x/api/http.html#class-httpincomingmessage" target="_blank">docs Node</a>:
+    <code>IncomingMessage</code> <strong>Extends: <code>stream.Readable</code></strong> — bản thân
+    <code>request</code> <em>là</em> một stream.
+  </p>
+
+  <p>Nhìn tận mắt. Tạo file <code>lab/02-body-stream.mjs</code>:</p>
+
+  <div class="code-block">
+    <span class="code-label">elearning-api/lab/02-body-stream.mjs</span>
+<pre><code><span class="kw">import</span> { createServer } <span class="kw">from</span> <span class="str">'node:http'</span>;
+
+<span class="kw">const</span> server = <span class="fn">createServer</span>(<span class="kw">async</span> (request, response) => {
+  <span class="kw">let</span> soKhuc = <span class="num">0</span>;
+  <span class="kw">let</span> tongByte = <span class="num">0</span>;
+
+  <span class="cmt">// `request` LÀ một stream đọc được. Vòng lặp này chạy MỖI KHI một khúc dữ liệu</span>
+  <span class="cmt">// vừa tới nơi qua dây mạng — không phải chạy một lần trên toàn bộ body.</span>
+  <span class="kw">for await</span> (<span class="kw">const</span> khuc <span class="kw">of</span> request) {
+    soKhuc++;
+    tongByte += khuc.length;
+  }
+
+  console.<span class="fn">log</span>(<span class="str">`Nhan </span>${soKhuc}<span class="str"> khuc, tong </span>${tongByte}<span class="str"> byte`</span>);
+
+  response.<span class="fn">writeHead</span>(<span class="num">200</span>, { <span class="str">'Content-Type'</span>: <span class="str">'text/plain; charset=utf-8'</span> });
+  response.<span class="fn">end</span>(<span class="str">`khuc=</span>${soKhuc}<span class="str"> byte=</span>${tongByte}<span class="str">\n`</span>);
+});
+
+server.<span class="fn">listen</span>(<span class="num">3338</span>, () => {
+  console.<span class="fn">log</span>(<span class="str">'Server dem khuc dang nghe tai http://localhost:3338'</span>);
+});</code></pre>
+  </div>
+
+  <div class="code-block">
+    <span class="code-label">bash — tab 2: chạy server đếm khúc</span>
+<pre><code>node lab/02-body-stream.mjs</code></pre>
+  </div>
+
+  <p>Ở <strong>tab 3</strong>, gửi 3 request với 3 kích cỡ body khác nhau:</p>
+
+  <div class="code-block">
+    <span class="code-label">bash — tab 3</span>
+<pre><code><span class="cmt"># 1) body tí xíu (8 byte)</span>
+curl -s -X POST http://localhost:3338 -d <span class="str">'xin chao'</span>
+
+<span class="cmt"># 2) body 5MB — node sinh ra 5 triệu chữ 'x' rồi ống qua curl</span>
+<span class="cmt">#    --data-binary @- nghĩa là "lấy body từ đầu vào chuẩn, đừng sửa gì cả"</span>
+node -e <span class="str">'process.stdout.write("x".repeat(5*1024*1024))'</span> | curl -s -X POST http://localhost:3338 --data-binary @-
+
+<span class="cmt"># 3) GET, hoàn toàn không có body</span>
+curl -s http://localhost:3338</code></pre>
+  </div>
+
+  <div class="code-block">
+    <span class="code-label">output THẬT (đã verify, Node v22.18.0)</span>
+<pre><code>khuc=<span class="num">1</span> byte=<span class="num">8</span>
+khuc=<span class="num">83</span> byte=<span class="num">5242880</span>
+khuc=<span class="num">0</span> byte=<span class="num">0</span></code></pre>
+  </div>
+
+  <div class="callout why">
+    <div class="ct">💡 Ba con số này nói gì</div>
+    <ul style="margin-bottom:0">
+      <li><strong>8 byte → 1 khúc.</strong> Nhỏ thì tới một phát, nên bạn dễ tưởng body luôn "có sẵn".</li>
+      <li><strong>5MB → 83 khúc.</strong> Vòng lặp chạy 83 lần. Nếu bạn chạy lại có thể ra 82 hay 84 —
+        <em>và đó mới là điểm đáng nhớ nhất</em>: số khúc phụ thuộc mạng và bộ đệm hệ điều hành, không
+        phải thứ bạn kiểm soát. <strong>Đừng bao giờ viết code giả định "chắc nó về một lần".</strong></li>
+      <li><strong>GET → 0 khúc.</strong> Vòng lặp không chạy lần nào và cũng không treo — stream kết thúc ngay.</li>
+    </ul>
+  </div>
+
+  <div class="callout tip">
+    <div class="ct">🎯 Chốt lại câu hỏi của Bài 01</div>
+    <p style="margin-bottom:0">
+      <code>method</code> và <code>url</code> có sẵn vì chúng <em>đã tới rồi</em> (nằm ở dòng đầu).
+      <code>body</code> không có sẵn vì nó <em>chưa chắc đã tới</em>. Cái mà mọi framework gọi là
+      <strong>"body parser"</strong> chính xác là 6 dòng gom khúc bạn vừa viết, cộng thêm
+      <code>JSON.parse</code>. Không hơn. Bạn vừa tự viết một body parser.
+    </p>
+  </div>
+
+  <h2>4. Thí nghiệm bắt buộc: một request rác giết cả server</h2>
+
+  <p>
+    Ở phần 2 tôi bọc <code>JSON.parse</code> trong <code>try/catch</code>. Nghe như chuyện "cẩn thận cho
+    lành". Không — <strong>bỏ nó đi thì cả server chết</strong>, và bạn phải thấy tận mắt một lần.
+  </p>
+
+  <p>
+    Ở tab 2, bấm <code>Ctrl+C</code> tắt server đếm khúc. Sửa <code>lab/02-body-stream.mjs</code> thành:
+  </p>
+
+  <div class="code-block">
+    <span class="code-label">elearning-api/lab/02-body-stream.mjs — bản CỐ Ý VIẾT SAI</span>
+<pre><code><span class="kw">import</span> { createServer } <span class="kw">from</span> <span class="str">'node:http'</span>;
+
+<span class="kw">const</span> server = <span class="fn">createServer</span>(<span class="kw">async</span> (request, response) => {
+  <span class="kw">let</span> raw = <span class="str">''</span>;
+  <span class="kw">for await</span> (<span class="kw">const</span> khuc <span class="kw">of</span> request) {
+    raw += khuc;
+  }
+
+  <span class="cmt">// CỐ Ý KHÔNG try/catch — để thấy hậu quả thật.</span>
+  <span class="kw">const</span> data = <span class="fn">JSON.parse</span>(raw);
+
+  response.<span class="fn">writeHead</span>(<span class="num">200</span>, { <span class="str">'Content-Type'</span>: <span class="str">'application/json; charset=utf-8'</span> });
+  response.<span class="fn">end</span>(<span class="fn">JSON.stringify</span>(data));
+});
+
+server.<span class="fn">listen</span>(<span class="num">3338</span>, () => {
+  console.<span class="fn">log</span>(<span class="str">'Server dang nghe tai http://localhost:3338'</span>);
+});</code></pre>
+  </div>
+
+  <p>Chạy lại ở tab 2, rồi ở tab 3 gọi <strong>đúng 3 lệnh theo thứ tự này</strong>:</p>
+
+  <div class="code-block">
+    <span class="code-label">bash — tab 3</span>
+<pre><code><span class="cmt"># Lần 1: JSON hợp lệ — mọi thứ bình thường</span>
+curl -s --max-time <span class="num">3</span> -X POST http://localhost:3338 -d <span class="str">'{"a":1}'</span>; <span class="fn">echo</span> <span class="str">" exit=</span>$?<span class="str">"</span>
+
+<span class="cmt"># Lần 2: một client gửi rác</span>
+curl -s --max-time <span class="num">3</span> -X POST http://localhost:3338 -d <span class="str">'hong'</span>; <span class="fn">echo</span> <span class="str">"exit=</span>$?<span class="str">"</span>
+
+<span class="cmt"># Lần 3: một client KHÁC, gửi đúng chuẩn, hoàn toàn vô tội</span>
+curl -s --max-time <span class="num">3</span> -X POST http://localhost:3338 -d <span class="str">'{"a":1}'</span>; <span class="fn">echo</span> <span class="str">"exit=</span>$?<span class="str">"</span></code></pre>
+  </div>
+
+  <div class="code-block">
+    <span class="code-label">kết quả THẬT (đã verify)</span>
+<pre><code>{<span class="str">"a"</span>:<span class="num">1</span>} exit=<span class="num">0</span>    <span class="cmt"># lần 1: ổn</span>
+exit=<span class="num">52</span>          <span class="cmt"># lần 2: server chết giữa chừng, không trả gì</span>
+exit=<span class="num">7</span>           <span class="cmt"># lần 3: 7 = Connection refused — KHÔNG CÒN AI Ở ĐẦU DÂY</span></code></pre>
+  </div>
+
+  <div class="code-block">
+    <span class="code-label">tab 2 — terminal chạy server (đã verify)</span>
+<pre><code>SyntaxError: Unexpected token <span class="str">'h'</span>, <span class="str">"hong"</span> is not valid JSON
+    at JSON.<span class="fn">parse</span> (&lt;anonymous&gt;)
+    at Server.&lt;anonymous&gt; (file:///.../lab/02-body-stream.mjs:<span class="num">10</span>:<span class="num">21</span>)
+
+Node.js v22.<span class="num">18</span>.<span class="num">0</span></code></pre>
+  </div>
+
+  <div class="callout danger">
+    <div class="ct">🚨 Đọc kỹ chỗ này — đây là bài học đắt nhất của cả bài</div>
+    <p>
+      Một người lạ gõ 4 ký tự rác, và <strong>toàn bộ tiến trình server thoát</strong>. Không chỉ request
+      đó hỏng — <em>mọi user đang online đều mất kết nối</em>. Lần gọi thứ 3 nhận
+      <code>exit=7</code> (connection refused): không còn tiến trình nào lắng nghe nữa.
+    </p>
+    <p>
+      Vì sao khắc nghiệt vậy? Handler của bạn là <code>async</code>, nên lỗi ném ra biến thành một
+      <strong>promise bị từ chối mà không ai bắt</strong>. Từ Node 15, mặc định của tình huống này là
+      <em>giết tiến trình</em> (trước kia chỉ cảnh báo). Node coi việc chạy tiếp với một lỗi bị nuốt
+      là nguy hiểm hơn việc chết.
+    </p>
+    <p style="margin-bottom:0">
+      Đối chiếu với Bài 01: quên <code>response.end()</code> làm <strong>một</strong> client treo, server
+      vẫn sống. Ném lỗi trong handler <code>async</code> làm <strong>tất cả</strong> client chết. Hai
+      mức độ khác nhau, cùng một gốc: <em>bạn phải chịu trách nhiệm cho mọi nhánh có thể xảy ra, kể cả
+      nhánh do người khác gây ra.</em> Đây chính là vấn đề mà <strong>exception filter</strong> của Nest
+      (Bài 12) sinh ra để giải quyết — giờ thì bạn đã biết nó cứu bạn khỏi cái gì.
+    </p>
+  </div>
+
+  <p>
+    <strong>Sửa lại</strong> <code>lab/02-body-stream.mjs</code> về bản đếm khúc ban đầu (hoặc thêm
+    <code>try/catch</code> vào) trước khi đi tiếp.
+  </p>
+
+  <h2>5. Status code: nói cho đúng, đừng trả 200 cho tất cả</h2>
+
+  <p>
+    Bài 01 server bạn trả <code>200</code> kể cả khi đường dẫn không tồn tại. Với con người thì trông
+    vẫn "chạy được"; với máy thì đó là <strong>nói dối</strong>. Mà API tồn tại để nói chuyện với máy.
+  </p>
+
+  <p>Bật lại server phần 2 ở tab 1 (<code>node lab/02-request-response.mjs</code>) và chạy đủ 6 ca sau:</p>
+
+  <div class="code-block">
+    <span class="code-label">bash — tab 3 · <code>-i</code> in cả header của response</span>
+<pre><code>curl -si http://localhost:3337/ping
+curl -si <span class="str">"http://localhost:3337/courses?level=co-ban"</span>
+curl -si -X POST http://localhost:3337/courses -d <span class="str">'{"title":"NestJS tu goc"}'</span>
+curl -si -X POST http://localhost:3337/courses -d <span class="str">'khong-phai-json'</span>
+curl -si -X DELETE http://localhost:3337/courses
+curl -si http://localhost:3337/khong-ton-tai</code></pre>
+  </div>
+
+  <p>Kết quả thật (tôi đã chạy đủ 6 ca trước khi giao bài):</p>
+
+  <table class="data">
+    <thead><tr><th>Bạn gọi</th><th>Trả về</th><th>Vì sao mã đó chứ không phải mã khác</th></tr></thead>
+    <tbody>
+      <tr><td><code>GET /ping</code></td><td><code>200 OK</code></td><td>Có thứ để trả, và trả được.</td></tr>
+      <tr><td><code>GET /courses?level=co-ban</code></td><td><code>200 OK</code></td><td>Danh sách rỗng <strong>vẫn là 200</strong> — "không có kết quả" khác "không tìm thấy tài nguyên".</td></tr>
+      <tr><td><code>POST /courses</code> (hợp lệ)</td><td><code>201 Created</code><br>+ <code>Location: /courses/1</code></td><td>Đã <em>sinh ra</em> một tài nguyên mới. RFC 9110 §15.3.2: <code>Location</code> chính là thứ chỉ ra tài nguyên vừa tạo.</td></tr>
+      <tr><td><code>POST /courses</code> (rác)</td><td><code>400 Bad Request</code></td><td><span class="nullcell">Lỗi của CLIENT</span>, không phải của bạn. Trả 500 ở đây là tự nhận tội hộ người khác — và làm hỏng biểu đồ cảnh báo lúc 2h sáng.</td></tr>
+      <tr><td><code>DELETE /courses</code></td><td><code>405 Method Not Allowed</code><br>+ <code>Allow: GET, POST</code></td><td>Đường dẫn <em>có tồn tại</em>, chỉ là không nhận method này. Trả 404 ở đây là nói dối.</td></tr>
+      <tr><td><code>GET /khong-ton-tai</code></td><td><code>404 Not Found</code></td><td>Không có tài nguyên nào ở đường dẫn đó, với bất kỳ method nào.</td></tr>
+    </tbody>
+  </table>
+
+  <div class="callout why">
+    <div class="ct">💡 Cách nhớ status code mà không cần học thuộc</div>
+    <p style="margin-bottom:0">
+      Chỉ cần nhớ <strong>chữ số đầu tiên = ai đang nói và tình hình ra sao</strong>:
+      <code>2xx</code> "xong rồi" · <code>3xx</code> "đi chỗ khác mà lấy" ·
+      <code>4xx</code> <strong>"bạn sai"</strong> · <code>5xx</code> <strong>"tôi sai"</strong>.
+      Ranh giới 4xx/5xx là ranh giới quan trọng nhất trong đời vận hành: <em>4xx thì bạn ngủ tiếp,
+      5xx thì bạn dậy sửa.</em> Trả sai mã ở đây nghĩa là hệ thống cảnh báo của bạn thành vô dụng.
+    </p>
+  </div>
+
+  <div class="callout warn">
+    <div class="ct">⚠️ <code>Allow</code> trên 405 không phải "cho đẹp" — RFC bắt buộc</div>
+    <p style="margin-bottom:0">
+      <a href="https://www.rfc-editor.org/rfc/rfc9110.html#name-405-method-not-allowed" target="_blank">RFC 9110 §15.5.6</a>
+      viết nguyên văn: <em>"The origin server <strong>MUST</strong> generate an Allow header field in a
+      405 response containing a list of the target resource's currently supported methods."</em>
+      Chữ <strong>MUST</strong> trong RFC là bắt buộc tuyệt đối. Lý do rất thực dụng: client nhận 405 mà
+      không có <code>Allow</code> thì không biết phải thử lại bằng method nào — bạn vừa nói "sai rồi"
+      mà không nói "vậy phải làm sao".
+    </p>
+  </div>
+
+  <h2>6. Header <code>Content-Type</code>: cái nhãn dán trên gói hàng</h2>
+
+  <p>
+    Bạn đã gõ <code>'Content-Type': 'application/json; charset=utf-8'</code> vài lần mà chưa hỏi vì sao.
+    Thử tháo nó ra xem sao — <strong>gửi đúng JSON nhưng dán nhãn <code>text/plain</code></strong>:
+  </p>
+
+  <div class="code-block">
+    <span class="code-label">bash — mở trình duyệt, dán vào thanh địa chỉ</span>
+<pre><code>http://localhost:3337/courses</code></pre>
+  </div>
+
+  <p>
+    Chrome/Safari sẽ <em>hiển thị JSON có cấu trúc, gập mở được</em>. Bây giờ sửa route
+    <code>GET /courses</code> đổi <code>application/json</code> thành <code>text/plain</code>, chạy lại
+    và mở lại — chỉ còn một dòng chữ trơ trọi.
+  </p>
+
+  <p>
+    <strong>Body không hề đổi một byte nào.</strong> Chỉ cái nhãn đổi. Và đó là toàn bộ ý nghĩa của
+    <code>Content-Type</code>: HTTP chuyển byte, nó <em>không biết</em> byte đó là gì; cái nhãn mới nói
+    cho bên nhận biết phải hiểu đống byte ấy thế nào.
+  </p>
+
+  <div class="callout danger">
+    <div class="ct">🚨 Vì sao dán nhãn sai là chuyện bảo mật, không chỉ chuyện thẩm mỹ</div>
+    <p style="margin-bottom:0">
+      Giả sử API của bạn trả nội dung do người dùng nhập, mà bạn dán nhãn <code>text/html</code>.
+      Trình duyệt sẽ <strong>thực thi</strong> phần <code>&lt;script&gt;</code> trong đó — kẻ tấn công
+      vừa chạy được code trên trang của bạn (XSS). Cùng một chuỗi byte: dán nhãn
+      <code>application/json</code> thì vô hại, dán nhãn <code>text/html</code> thì thành lỗ hổng.
+      Bài 29 sẽ quay lại đề tài này; giờ chỉ cần khắc vào đầu: <em>nhãn là một quyết định bảo mật.</em>
+    </p>
+  </div>
+
+  <div class="quiz">
+    <h3>🧠 Kiểm tra nhanh (bấm để có phản hồi ngay)</h3>
+
+    <div class="q">Câu 1. Vì sao <code>request.body</code> là <code>undefined</code> trong khi <code>request.method</code> thì có sẵn?</div>
+    <button class="opt" data-correct="false" data-explain="Không phải chuyện bảo mật. Node đưa bạn body đầy đủ, chỉ là đưa dưới dạng stream chứ không phải dưới dạng một biến có sẵn.">A. Vì lý do bảo mật — Node giấu body cho tới khi bạn xác thực</button>
+    <button class="opt" data-correct="true" data-explain="Đúng. Method và url nằm ở dòng đầu của request nên đã tới nơi trước khi handler chạy. Body tới sau, và có thể lớn tuỳ ý — nếu Node đợi gom đủ mới gọi bạn thì một người upload 2GB sẽ giam handler lại. Nên nó đưa cái vòi (stream) thay vì cái xô. Docs Node: IncomingMessage Extends stream.Readable.">B. Vì method/url nằm ở phần đầu đã tới nơi, còn body tới sau và có thể lớn tuỳ ý — nên Node đưa dạng stream</button>
+    <button class="opt" data-correct="false" data-explain="Không có cấu hình nào bật lên được cả — node:http cố ý dừng ở mức giao thức. Thứ 'bật lên được' mà bạn đang nghĩ tới chính là body parser của Express/Nest, và nó chỉ là vòng lặp gom khúc bạn vừa tự viết ở phần 3.">C. Vì cần bật một tuỳ chọn cấu hình trong <code>createServer</code></button>
+    <div class="feedback"></div>
+
+    <div class="q">Câu 2. API <code>GET /courses?level=nang-cao</code> chạy tìm và không có khoá học nào khớp. Trả mã gì?</div>
+    <button class="opt" data-correct="true" data-explain="Đúng. Tài nguyên '/courses' (danh sách khoá học) TỒN TẠI và bạn trả về được — nó chỉ rỗng. 'Không có kết quả' là một câu trả lời thành công. Nếu trả 404 ở đây, client sẽ không phân biệt được 'tìm không ra' với 'API này không tồn tại/gõ sai đường dẫn' — hai tình huống cần xử lý hoàn toàn khác nhau.">A. <code>200</code> với mảng rỗng</button>
+    <button class="opt" data-correct="false" data-explain="Đây là lỗi phổ biến nhất khi mới thiết kế API. 404 nghĩa là 'đường dẫn này không có gì', chứ không phải 'bộ lọc của bạn không ra kết quả'. Trả 404 làm client không phân biệt nổi mình gõ sai URL hay chỉ là không có dữ liệu.">B. <code>404</code> vì không tìm thấy khoá học nào</button>
+    <button class="opt" data-correct="false" data-explain="204 nghĩa là 'thành công và cố tình KHÔNG có body' — client sẽ không đọc gì cả. Nhưng ở đây bạn CÓ body để trả (một mảng rỗng, kèm cấu trúc phân trang nếu có). Dùng 204 làm client phải viết thêm nhánh xử lý đặc biệt cho cùng một endpoint.">C. <code>204 No Content</code></button>
+    <div class="feedback"></div>
+
+    <div class="q">Câu 3. Bạn xoá <code>try/catch</code> quanh <code>JSON.parse</code> trong handler <code>async</code>, rồi một client gửi body rác. Hậu quả?</div>
+    <button class="opt" data-correct="false" data-explain="Không có ai tự trả 500 hộ bạn cả. Trong node:http thuần không hề có lớp bắt lỗi nào ở giữa — đó chính xác là thứ NestJS thêm vào (exception filter, Bài 12), và là lý do lớp đó tồn tại.">A. Riêng request đó nhận <code>500</code>, các request khác không sao</button>
+    <button class="opt" data-correct="false" data-explain="Handler bị ném lỗi thì không chạy tới dòng response.end() — nên client này chắc chắn không nhận được gì. Nhưng hậu quả còn nặng hơn thế nhiều: hãy nhớ lại lần 3 trong thí nghiệm phần 4 trả về exit=7.">B. Riêng request đó bị treo, server vẫn phục vụ người khác bình thường</button>
+    <button class="opt" data-correct="true" data-explain="Đúng, và bạn đã tự chạy ra exit=7 (Connection refused) ở lần gọi thứ 3. Lỗi ném trong hàm async thành unhandled promise rejection; từ Node 15 mặc định là GIẾT tiến trình. Đây là chênh lệch mức độ so với Bài 01: quên response.end() hại MỘT client, ném lỗi trong async hại TẤT CẢ.">C. Cả tiến trình server thoát — mọi client đang kết nối đều mất, request sau nhận Connection refused</button>
+    <div class="feedback"></div>
+
+    <div class="q">Câu 4. Client gọi <code>DELETE /courses</code>. Server chỉ hỗ trợ <code>GET</code> và <code>POST</code> ở đường dẫn đó. Response đúng chuẩn gồm những gì?</div>
+    <button class="opt" data-correct="false" data-explain="404 nghĩa là 'không có gì ở đường dẫn này' — nhưng /courses rõ ràng có tồn tại, bạn vẫn đang phục vụ GET và POST ở đó. Trả 404 là đưa thông tin sai cho client, khiến người ta đi debug nhầm hướng (tưởng gõ sai URL).">A. <code>404 Not Found</code> — vì không có route nào khớp</button>
+    <button class="opt" data-correct="true" data-explain="Chính xác. RFC 9110 §15.5.6 dùng chữ MUST: 'The origin server MUST generate an Allow header field in a 405 response containing a list of the target resource's currently supported methods.' Không có Allow thì bạn mới nói được nửa câu — 'sai rồi' mà không nói 'vậy phải dùng gì'.">B. <code>405 Method Not Allowed</code> <strong>kèm</strong> header <code>Allow: GET, POST</code></button>
+    <button class="opt" data-correct="false" data-explain="405 đúng nhưng thiếu Allow là vi phạm RFC — và quan trọng hơn là vô dụng trên thực tế: client biết mình sai mà không biết sửa thế nào. Header Allow không phải tuỳ chọn cho đẹp.">C. <code>405 Method Not Allowed</code> là đủ, <code>Allow</code> chỉ là tuỳ chọn cho đẹp</button>
+    <div class="feedback"></div>
+
+    <div class="q">Câu 5. Cùng một chuỗi byte JSON, bạn đổi header từ <code>application/json</code> sang <code>text/html</code>. Điều gì thay đổi?</div>
+    <button class="opt" data-correct="false" data-explain="Body không đổi một byte nào — bạn đã tự kiểm chứng ở phần 6. Content-Type là cái nhãn dán bên ngoài, không đụng tới nội dung bên trong.">A. Node tự chuyển đổi nội dung body sang HTML</button>
+    <button class="opt" data-correct="true" data-explain="Đúng, và đây là chỗ nó thành vấn đề bảo mật chứ không chỉ thẩm mỹ. Bên nhận quyết định cách hiểu byte DỰA TRÊN cái nhãn. Dán nhãn text/html cho nội dung có phần do người dùng nhập, trình duyệt sẽ thực thi &lt;script&gt; bên trong — đó là XSS. Cùng byte, đổi nhãn, đổi từ vô hại sang lỗ hổng.">B. Body y nguyên, nhưng bên nhận diễn giải khác — và với <code>text/html</code> thì trình duyệt sẽ <em>thực thi</em> script bên trong</button>
+    <button class="opt" data-correct="false" data-explain="Không có gì hỏng cả — request vẫn 200, curl vẫn in ra bình thường. Chính sự 'im lặng' đó mới nguy hiểm: bạn không hề biết mình vừa mở một cánh cửa, cho tới khi có người bước qua.">C. Request hỏng, client nhận lỗi parse</button>
+    <div class="feedback"></div>
+  </div>
+
+  <div class="callout tip">
+    <div class="ct">✅ Bạn vừa đạt được</div>
+    <ul class="checklist">
+      <li>Hiểu vì sao <code>request.url</code> không phải đường dẫn, và tách đúng bằng <code>new URL()</code></li>
+      <li>Định tuyến theo <code>method + pathname</code> — nền tảng của REST</li>
+      <li>Tự viết một "body parser": đọc body từ stream bằng <code>for await</code></li>
+      <li>Thấy tận mắt body 5MB về thành ~83 khúc, và hiểu vì sao không được giả định "nó về một lần"</li>
+      <li>Chứng kiến một request rác giết cả tiến trình — và biết vì sao Nest cần exception filter</li>
+      <li>Chọn đúng <code>200 / 201 / 400 / 404 / 405</code> và biết ranh giới 4xx (bạn sai) vs 5xx (tôi sai)</li>
+      <li>Hiểu <code>Content-Type</code> là một quyết định bảo mật, không phải trang trí</li>
+    </ul>
+  </div>
+
+  <h2>7. Câu hỏi tư duy (bắc cầu sang Bài 03)</h2>
+
+  <p>
+    Ở phần 3, khi bạn gửi body 5MB, handler đứng ở <code>for await</code> đợi từng khúc về. Trong lúc
+    đợi đó — <strong>server có phục vụ được người khác không?</strong>
+  </p>
+  <p>
+    Thử nghĩ kỹ, vì hai câu trả lời đều nghe hợp lý. <em>"Không"</em>: JavaScript chỉ có một luồng, nó
+    đang mắc kẹt trong vòng lặp thì làm sao chạy việc khác. <em>"Có"</em>: nếu mỗi upload lớn đều làm
+    đứng cả server thì Node đã không ai dùng để làm backend.
+  </p>
+  <p>
+    Cả hai đều đúng một nửa, và chỗ chúng gặp nhau chính là thứ khiến Node <em>tồn tại</em>. Nó cũng
+    giải thích luôn một câu đối lập mà bạn sẽ nghe suốt: <em>"Node nhanh vì bất đồng bộ"</em> và
+    <em>"Node chậm, đừng dùng cho việc nặng"</em> — cả hai câu đều đúng, tuỳ vào bạn đang chờ
+    <strong>I/O</strong> hay đang <strong>tính toán</strong>. Bài 03 mổ xẻ event loop để bạn nói được
+    chính xác cái nào là cái nào.
+  </p>
+
+  <div class="next-box">
+    <div class="nl">→ Bài tiếp theo</div>
+    <div class="nt">Bài 03 · Event loop &amp; non-blocking I/O — vì sao Node hợp việc I/O</div>
+    <p class="nd">Tự tay làm server đứng hình bằng một vòng lặp, rồi làm nó phục vụ 100 request cùng lúc mà không thêm một luồng nào. Cùng một tiến trình, hai kết cục.</p>
+  </div>
+
+  <div class="navbar">
+    <a href="0001-http-that-su-la-gi.html">← Trước</a>
+    <a href="index.html">🏠 Mục lục</a>
+    <a href="0003-event-loop.html">Sau →</a>
+  </div>
+
+  <p class="try-it">
+    💬 <strong>Chạy tới đâu thấy lạ thì hỏi ngay.</strong> Không có bài tập phải nộp —
+    gõ lại code trong bài, thấy output khớp là bạn đã nắm. Muốn chắc thì gửi đáp án 5 câu quiz,
+    tôi chấm liền.
+  </p>
+
+</div>
+<script src="lesson-enhance.js"></script>
+</body>
+</html>
