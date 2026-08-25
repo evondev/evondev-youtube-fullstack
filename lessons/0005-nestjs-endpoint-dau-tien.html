@@ -1,0 +1,427 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Bài 05 · NestJS: Module – Controller – Service, và endpoint thật đầu tiên</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="lesson.css">
+</head>
+<body>
+<div class="wrap">
+
+  <span class="lesson-tag">Module 2 · Bài 05</span>
+  <h1>NestJS: Module – Controller – Service, và endpoint thật đầu tiên</h1>
+  <p class="subtitle">Hết thời <code>lab/</code>. Từ bài này code bạn viết nằm trong <code>src/</code> của API thật — và cuối bài, <code>elearning-api</code> có endpoint khoá học chạy được.</p>
+  <p class="meta-line">⏱ ~40 phút · 🎯 Sản phẩm: <code>GET /courses</code> · <code>GET /courses?level=</code> · <code>GET /courses/:id</code> — có lọc, có 404, có 400, không dòng nào bạn phải tự viết.</p>
+
+  <div class="callout bridge">
+    <div class="ct">🌉 Bốn bài vừa rồi không phí — đây là lúc thu hoạch</div>
+    <p>
+      Ở Bài 02 bạn <strong>tự tay</strong> làm 5 việc cho mỗi request: tách <code>pathname</code> khỏi
+      query, so <code>method</code>, gom body từ stream, chọn status code, dán
+      <code>Content-Type</code>. Mỗi route thêm vào là chép lại từng ấy việc.
+    </p>
+    <p style="margin-bottom:0">
+      NestJS làm <em>đúng năm việc đó</em>, tự động. Nhưng vì bạn đã tự viết tay một lần, bạn sẽ nhìn ra
+      ngay <strong>nó đang làm hộ cái gì</strong> — chứ không phải học thuộc mấy cái decorator rồi cầu
+      cho nó chạy. Đó là toàn bộ lý do Module 1 tồn tại.
+    </p>
+  </div>
+
+  <h2>1. Ba khái niệm, và vì sao phải tách ra ba</h2>
+
+  <p>
+    Nest bắt bạn chia code thành ba loại. Nghe như thủ tục rườm rà, nhưng mỗi cái trả lời một câu hỏi khác nhau:
+  </p>
+
+  <table class="data">
+    <thead><tr><th>Thứ</th><th>Trả lời câu hỏi</th><th>Trong e-learning</th></tr></thead>
+    <tbody>
+      <tr>
+        <td><strong>Controller</strong></td>
+        <td>Request nào thì gọi hàm nào? Lấy dữ liệu ra khỏi HTTP.</td>
+        <td>"<code>GET /courses</code> thì chạy gì"</td>
+      </tr>
+      <tr>
+        <td><strong>Service</strong></td>
+        <td>Nghiệp vụ thật sự làm gì? <span class="nullcell">Không biết gì về HTTP.</span></td>
+        <td>"lọc khoá học theo trình độ"</td>
+      </tr>
+      <tr>
+        <td><strong>Module</strong></td>
+        <td>Những thứ trên thuộc về nhóm nào, ai được dùng ai?</td>
+        <td>"nhóm <em>khoá học</em> gồm controller + service này"</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="callout why">
+    <div class="ct">💡 Vì sao tách Service ra khỏi Controller — lý do thực dụng</div>
+    <p style="margin-bottom:0">
+      Vì <strong>nghiệp vụ sống lâu hơn giao diện của nó</strong>. Cùng một việc "lọc khoá học" sau này
+      sẽ được gọi từ: HTTP, một cron job nhắc học (Bài 38), một hàng đợi gửi mail (Bài 37), và test tự
+      động (Bài 43). Nếu logic nằm trong controller, nó dính chặt vào <code>request</code>/<code>response</code>
+      và <em>chỉ dùng được qua HTTP</em>. Tách ra service thì bốn chỗ kia gọi thẳng như một hàm bình thường.
+      <br><br>
+      Đây cũng là câu trả lời cho <em>"sao không viết hết vào controller cho nhanh?"</em> — nhanh hơn
+      đúng lúc đầu, rồi trả giá ở lần thứ hai cần dùng lại.
+    </p>
+  </div>
+
+  <h2>2. Tạo nhóm <em>khoá học</em></h2>
+
+  <p>Tạo thư mục mới trong <code>src/</code>:</p>
+
+  <div class="code-block">
+    <span class="code-label">bash</span>
+<pre><code><span class="kw">cd</span> ~/Documents/youtube/fullstack/elearning-api
+<span class="fn">mkdir</span> -p src/courses</code></pre>
+  </div>
+
+  <p>File 1 — hình dạng dữ liệu. Tạo <code>src/courses/course.interface.ts</code>:</p>
+
+  <div class="code-block">
+    <span class="code-label">elearning-api/src/courses/course.interface.ts</span>
+<pre><code><span class="cmt">// Hình dạng của một khoá học. Dùng interface theo đúng convention của bạn.</span>
+<span class="kw">export interface</span> Course {
+  id: <span class="kw">number</span>;
+  title: <span class="kw">string</span>;
+  level: <span class="str">'co-ban'</span> | <span class="str">'nang-cao'</span>;
+  price: <span class="kw">number</span>;
+}</code></pre>
+  </div>
+
+  <p>File 2 — nghiệp vụ. Tạo <code>src/courses/courses.service.ts</code>:</p>
+
+  <div class="code-block">
+    <span class="code-label">elearning-api/src/courses/courses.service.ts</span>
+<pre><code><span class="kw">import</span> { Injectable, NotFoundException } <span class="kw">from</span> <span class="str">'@nestjs/common'</span>;
+<span class="kw">import</span> { Course } <span class="kw">from</span> <span class="str">'./course.interface'</span>;
+
+<span class="cmt">// @Injectable() = "class này có thể được Nest tạo và tiêm vào chỗ khác".</span>
+<span class="kw">@Injectable</span>()
+<span class="kw">export class</span> CoursesService {
+  <span class="cmt">// Tạm để trong bộ nhớ. Module 3 sẽ thay bằng Postgres thật.</span>
+  <span class="kw">private readonly</span> courses: Course[] = [
+    { id: <span class="num">1</span>, title: <span class="str">'NestJS từ gốc'</span>, level: <span class="str">'co-ban'</span>, price: <span class="num">499000</span> },
+    { id: <span class="num">2</span>, title: <span class="str">'Postgres cho backend'</span>, level: <span class="str">'nang-cao'</span>, price: <span class="num">799000</span> },
+  ];
+
+  <span class="fn">findAll</span>(level?: <span class="kw">string</span>): Course[] {
+    <span class="kw">if</span> (!level) <span class="kw">return this</span>.courses;
+
+    <span class="kw">return this</span>.courses.<span class="fn">filter</span>((course) => course.level === level);
+  }
+
+  <span class="fn">findOne</span>(id: <span class="kw">number</span>): Course {
+    <span class="kw">const</span> course = <span class="kw">this</span>.courses.<span class="fn">find</span>((item) => item.id === id);
+
+    <span class="cmt">// Ném exception, KHÔNG tự tay writeHead(404). Nest lo phần còn lại.</span>
+    <span class="kw">if</span> (!course) <span class="kw">throw new</span> <span class="fn">NotFoundException</span>(<span class="str">`Không có khoá học id=</span>${id}<span class="str">`</span>);
+
+    <span class="kw">return</span> course;
+  }
+}</code></pre>
+  </div>
+
+  <p>
+    Để ý: <strong>cả file này không có một chữ nào về HTTP.</strong> Không <code>request</code>, không
+    <code>response</code>, không status code. Đó là dấu hiệu bạn tách đúng.
+  </p>
+
+  <p>File 3 — cửa vào HTTP. Tạo <code>src/courses/courses.controller.ts</code>:</p>
+
+  <div class="code-block">
+    <span class="code-label">elearning-api/src/courses/courses.controller.ts</span>
+<pre><code><span class="kw">import</span> { Controller, Get, Param, ParseIntPipe, Query } <span class="kw">from</span> <span class="str">'@nestjs/common'</span>;
+<span class="kw">import</span> { CoursesService } <span class="kw">from</span> <span class="str">'./courses.service'</span>;
+<span class="cmt">// Chú ý `import type` — bắt buộc, giải thích ở callout ngay dưới.</span>
+<span class="kw">import type</span> { Course } <span class="kw">from</span> <span class="str">'./course.interface'</span>;
+
+<span class="cmt">// Mọi route trong class này đều bắt đầu bằng /courses</span>
+<span class="kw">@Controller</span>(<span class="str">'courses'</span>)
+<span class="kw">export class</span> CoursesController {
+  <span class="cmt">// Nest TỰ tạo CoursesService và đưa vào đây — ta không hề gọi `new`.</span>
+  <span class="fn">constructor</span>(<span class="kw">private readonly</span> coursesService: CoursesService) {}
+
+  <span class="kw">@Get</span>()
+  <span class="fn">findAll</span>(<span class="kw">@Query</span>(<span class="str">'level'</span>) level?: <span class="kw">string</span>): Course[] {
+    <span class="kw">return this</span>.coursesService.<span class="fn">findAll</span>(level);
+  }
+
+  <span class="kw">@Get</span>(<span class="str">':id'</span>)
+  <span class="fn">findOne</span>(<span class="kw">@Param</span>(<span class="str">'id'</span>, ParseIntPipe) id: <span class="kw">number</span>): Course {
+    <span class="kw">return this</span>.coursesService.<span class="fn">findOne</span>(id);
+  }
+}</code></pre>
+  </div>
+
+  <div class="callout warn">
+    <div class="ct">⚠️ Bỏ chữ <code>type</code> đi là build gãy — tôi đã dính khi soạn bài này</div>
+    <p>
+      Viết <code>import { Course }</code> như bình thường, chạy <code>npx tsc --noEmit</code> sẽ ra:
+    </p>
+    <div class="code-block" style="margin-top:8px">
+      <span class="code-label">lỗi THẬT tôi gặp khi verify</span>
+<pre><code>error TS1272: A type referenced in a decorated signature must be
+imported with <span class="str">'import type'</span> ... when <span class="str">'isolatedModules'</span> and
+<span class="str">'emitDecoratorMetadata'</span> are enabled.</code></pre>
+    </div>
+    <p style="margin-top:10px; margin-bottom:0">
+      <strong>Vì sao:</strong> decorator của Nest cần TypeScript phát ra thông tin kiểu vào file JS lúc
+      biên dịch. Với một <code>interface</code> — thứ <em>biến mất hoàn toàn</em> sau khi biên dịch —
+      trình biên dịch không biết nên giữ hay bỏ dòng import. <code>import type</code> nói rõ:
+      <em>"đây chỉ là kiểu, xoá đi lúc build"</em>. Gặp <code>TS1272</code> ở bất kỳ đâu trong Nest,
+      cách sửa luôn là thêm chữ <code>type</code>.
+    </p>
+  </div>
+
+  <p>File 4 — gom nhóm. Tạo <code>src/courses/courses.module.ts</code>:</p>
+
+  <div class="code-block">
+    <span class="code-label">elearning-api/src/courses/courses.module.ts</span>
+<pre><code><span class="kw">import</span> { Module } <span class="kw">from</span> <span class="str">'@nestjs/common'</span>;
+<span class="kw">import</span> { CoursesController } <span class="kw">from</span> <span class="str">'./courses.controller'</span>;
+<span class="kw">import</span> { CoursesService } <span class="kw">from</span> <span class="str">'./courses.service'</span>;
+
+<span class="kw">@Module</span>({
+  controllers: [CoursesController],
+  <span class="cmt">// providers = những thứ Nest được phép tạo và tiêm vào trong nhóm này.</span>
+  providers: [CoursesService],
+})
+<span class="kw">export class</span> CoursesModule {}</code></pre>
+  </div>
+
+  <p>Cuối cùng, khai báo nhóm mới với ứng dụng. Sửa <code>src/app.module.ts</code>:</p>
+
+  <div class="code-block">
+    <span class="code-label">elearning-api/src/app.module.ts — thêm 2 dòng</span>
+<pre><code><span class="kw">import</span> { Module } <span class="kw">from</span> <span class="str">'@nestjs/common'</span>;
+<span class="kw">import</span> { AppController } <span class="kw">from</span> <span class="str">'./app.controller'</span>;
+<span class="kw">import</span> { AppService } <span class="kw">from</span> <span class="str">'./app.service'</span>;
+<span class="kw">import</span> { CoursesModule } <span class="kw">from</span> <span class="str">'./courses/courses.module'</span>;   <span class="cmt">// &lt;-- THEM</span>
+
+<span class="kw">@Module</span>({
+  imports: [CoursesModule],                                    <span class="cmt">// &lt;-- THEM</span>
+  controllers: [AppController],
+  providers: [AppService],
+})
+<span class="kw">export class</span> AppModule {}</code></pre>
+  </div>
+
+  <h2>3. Chạy — và đọc cái bảng route Nest tự in ra</h2>
+
+  <div class="code-block">
+    <span class="code-label">bash</span>
+<pre><code>npm run start</code></pre>
+  </div>
+
+  <div class="code-block">
+    <span class="code-label">output THẬT (đã verify — Nest 11.0.1, Node v22.18.0)</span>
+<pre><code>Starting Nest application...
+AppController {/}:
+Mapped {/, GET} route
+CoursesController {/courses}:
+Mapped {/courses, GET} route
+Mapped {/courses/:id, GET} route
+Nest application successfully started</code></pre>
+  </div>
+
+  <div class="callout tip">
+    <div class="ct">🔎 Đây là công cụ debug tốt nhất của Nest, dùng nó ngay từ hôm nay</div>
+    <p style="margin-bottom:0">
+      Mỗi lần khởi động, Nest in ra <strong>đúng bảng định tuyến nó đang có</strong>. Sau này gọi API mà
+      nhận 404 khó hiểu, chỗ nhìn đầu tiên là bảng này — nếu route không có trong đó thì vấn đề nằm ở
+      <em>khai báo</em> (quên thêm module vào <code>imports</code>, quên controller trong
+      <code>controllers</code>), chứ không phải ở code xử lý. Tiết kiệm rất nhiều thời gian đoán mò.
+    </p>
+  </div>
+
+  <h2>4. Gọi thật — và đếm xem Nest làm hộ bao nhiêu việc</h2>
+
+  <div class="code-block">
+    <span class="code-label">bash — tab 2</span>
+<pre><code>curl -s http://localhost:3333/courses
+curl -s <span class="str">"http://localhost:3333/courses?level=nang-cao"</span>
+curl -s http://localhost:3333/courses/1
+curl -s http://localhost:3333/courses/99
+curl -s http://localhost:3333/courses/abc</code></pre>
+  </div>
+
+  <div class="code-block">
+    <span class="code-label">output THẬT (đã verify)</span>
+<pre><code><span class="cmt"># GET /courses</span>
+[{<span class="str">"id"</span>:<span class="num">1</span>,<span class="str">"title"</span>:<span class="str">"NestJS từ gốc"</span>,<span class="str">"level"</span>:<span class="str">"co-ban"</span>,<span class="str">"price"</span>:<span class="num">499000</span>}, ... ]
+
+<span class="cmt"># GET /courses?level=nang-cao   -&gt; loc dung 1 khoa</span>
+[{<span class="str">"id"</span>:<span class="num">2</span>,<span class="str">"title"</span>:<span class="str">"Postgres cho backend"</span>,<span class="str">"level"</span>:<span class="str">"nang-cao"</span>,<span class="str">"price"</span>:<span class="num">799000</span>}]
+
+<span class="cmt"># GET /courses/99   -&gt; 404</span>
+{<span class="str">"message"</span>:<span class="str">"Không có khoá học id=99"</span>,<span class="str">"error"</span>:<span class="str">"Not Found"</span>,<span class="str">"statusCode"</span>:<span class="num">404</span>}
+
+<span class="cmt"># GET /courses/abc  -&gt; 400</span>
+{<span class="str">"message"</span>:<span class="str">"Validation failed (numeric string is expected)"</span>,<span class="str">"error"</span>:<span class="str">"Bad Request"</span>,<span class="str">"statusCode"</span>:<span class="num">400</span>}</code></pre>
+  </div>
+
+  <p>
+    Giờ đối chiếu với Bài 02 — <strong>cùng những hành vi đó, bạn đã phải tự viết từng dòng</strong>:
+  </p>
+
+  <table class="data">
+    <thead><tr><th>Việc</th><th>Bài 02 — bạn tự viết</th><th>Bài 05 — Nest lo</th></tr></thead>
+    <tbody>
+      <tr><td>Tách <code>pathname</code> khỏi query</td><td><code>new URL(...)</code></td><td><code>@Controller('courses')</code></td></tr>
+      <tr><td>Đọc tham số query</td><td><code>url.searchParams.get('level')</code></td><td><code>@Query('level')</code></td></tr>
+      <tr><td>Đọc phần động của đường dẫn</td><td><span class="nullcell">chưa làm nổi</span></td><td><code>@Param('id')</code></td></tr>
+      <tr><td>Ép kiểu + báo lỗi nếu sai</td><td><span class="nullcell">chưa hề có</span></td><td><code>ParseIntPipe</code> → <code>400</code></td></tr>
+      <tr><td>Chuyển kết quả thành JSON</td><td><code>JSON.stringify(...)</code></td><td><code>return</code> là xong</td></tr>
+      <tr><td>Dán <code>Content-Type</code></td><td><code>writeHead(200, {...})</code></td><td>tự động</td></tr>
+      <tr><td>Trả 404 đúng hình dạng</td><td><code>writeHead(404)</code> + tự bịa JSON</td><td><code>throw new NotFoundException()</code></td></tr>
+    </tbody>
+  </table>
+
+  <div class="callout why">
+    <div class="ct">💡 Cái đáng giá nhất trong bảng trên là dòng cuối</div>
+    <p>
+      Ở Bài 02, mỗi lần cần báo lỗi bạn phải <em>nhớ</em> tự tay ghi status và tự bịa hình dạng JSON —
+      và bạn đã thấy hậu quả: quên một nhánh là client treo, ném lỗi là cả server chết (Bài 04).
+    </p>
+    <p style="margin-bottom:0">
+      Ở đây bạn chỉ <code>throw</code>. Nest bắt lấy, đổi thành response đúng chuẩn, <strong>và tiến
+      trình vẫn sống</strong>. Đó chính là <em>exception filter</em> — thứ tôi hẹn từ Bài 02. Nó là lời
+      giải cho đúng cái tai nạn bạn đã tự gây ra trong <code>lab/</code>.
+    </p>
+  </div>
+
+  <h2>5. Điều kỳ lạ: ta chưa hề gọi <code>new CoursesService()</code></h2>
+
+  <p>
+    Nhìn lại controller: nó dùng <code>this.coursesService</code>, nhưng <strong>không chỗ nào tạo ra
+    đối tượng đó</strong>. Chỉ khai báo trong <code>constructor</code>, thế là có.
+  </p>
+
+  <div class="code-block">
+    <span class="code-label">Nest làm gì lúc khởi động</span>
+<pre><code><span class="num">1</span>. Doc @Module -&gt; thay providers: [CoursesService]
+<span class="num">2</span>. Doc constructor cua CoursesController
+   -&gt; "no can mot CoursesService"
+<span class="num">3</span>. Tao MOT the hien CoursesService, cat vao so
+<span class="num">4</span>. Tao CoursesController, dua the hien do vao
+<span class="num">5</span>. Ai can CoursesService nua -&gt; dua LAI CAI CU, khong tao moi</code></pre>
+  </div>
+
+  <p>
+    Cái này gọi là <strong>Dependency Injection</strong>: bạn <em>khai báo mình cần gì</em>, không
+    <em>tự đi lấy</em>. Nest giữ một cuốn sổ các thứ nó biết tạo, và lắp vào đúng chỗ.
+  </p>
+
+  <div class="callout why">
+    <div class="ct">💡 Được gì so với việc tự <code>new</code>?</div>
+    <ul style="margin-bottom:0">
+      <li><strong>Mặc định chỉ có một thể hiện</strong> dùng chung cả ứng dụng. Quan trọng khi service
+        giữ thứ đắt tiền như kết nối database — bạn không muốn mỗi request mở một kết nối mới.</li>
+      <li><strong>Thay được lúc test.</strong> Vì controller không tự tạo service, lúc test bạn đưa cho
+        nó một service giả — không cần database nào. Đó là Bài 43.</li>
+      <li><strong>Đổi ruột không đổi vỏ.</strong> Hôm nay <code>CoursesService</code> đọc từ mảng trong
+        bộ nhớ; Module 3 đổi sang Postgres. Controller <em>không phải sửa một chữ</em> — nó chỉ biết
+        "có ai đó cho tôi danh sách khoá học".</li>
+    </ul>
+  </div>
+
+  <div class="callout warn">
+    <div class="ct">⚠️ Lỗi DI kinh điển bạn chắc chắn sẽ gặp</div>
+    <p style="margin-bottom:0">
+      Quên đưa service vào <code>providers</code> → Nest báo:
+      <code>Nest can't resolve dependencies of the CoursesController (?)</code>.
+      Dấu <code>?</code> chính là <strong>chỗ nó không tìm ra</strong>. Đọc được dấu hỏi nằm ở tham số
+      thứ mấy là biết ngay thiếu cái gì — gần như luôn là quên khai báo trong <code>providers</code>,
+      hoặc service nằm ở module khác mà module đó chưa <code>exports</code>.
+    </p>
+  </div>
+
+  <div class="quiz">
+    <h3>🧠 Kiểm tra nhanh (bấm để có phản hồi ngay)</h3>
+
+    <div class="q">Câu 1. Vì sao nên tách nghiệp vụ ra <code>Service</code> thay vì viết thẳng trong <code>Controller</code>?</div>
+    <button class="opt" data-correct="false" data-explain="Không nhanh hơn chút nào — cùng một tiến trình, cùng một lời gọi hàm. Lợi ích của việc tách là về khả năng dùng lại và test, không phải hiệu năng.">A. Vì chạy nhanh hơn</button>
+    <button class="opt" data-correct="true" data-explain="Đúng. Nghiệp vụ sống lâu hơn giao diện của nó: 'lọc khoá học' sau này sẽ được gọi từ cron nhắc học (Bài 38), hàng đợi gửi mail (Bài 37) và test tự động (Bài 43). Nếu logic dính vào request/response thì chỉ dùng được qua HTTP. Dấu hiệu tách đúng: mở courses.service.ts ra không thấy chữ HTTP nào.">B. Vì nghiệp vụ còn được gọi từ cron, hàng đợi và test — những chỗ không có HTTP</button>
+    <button class="opt" data-correct="false" data-explain="Nest không bắt buộc — bạn hoàn toàn viết được hết vào controller và nó vẫn chạy. Đây là quy ước vì lợi ích thật sự, không phải vì framework ép.">C. Vì Nest bắt buộc, không tách thì không chạy</button>
+    <div class="feedback"></div>
+
+    <div class="q">Câu 2. <code>GET /courses/99</code> mà không có khoá nào id=99. Trong service ta chỉ <code>throw new NotFoundException(...)</code>. Vì sao client nhận được <code>404</code> đúng chuẩn mà tiến trình không chết như ở Bài 04?</div>
+    <button class="opt" data-correct="false" data-explain="Không phải. NotFoundException là một Error bình thường, ném ra y như mọi lỗi khác. Điều khác biệt nằm ở chỗ có ai đó ĐANG CHỜ để bắt nó.">A. Vì <code>NotFoundException</code> không thật sự ném lỗi</button>
+    <button class="opt" data-correct="true" data-explain="Đúng. Nest bọc mỗi handler trong một lớp bắt lỗi sẵn (exception filter) — nó bắt exception, đọc ra status code tương ứng, dựng JSON đúng hình dạng rồi trả về. Ở Bài 04 trong lab/ bạn không có lớp đó nên lỗi bay thẳng ra ngoài thành unhandled rejection và giết tiến trình. Đây chính là món tôi hẹn từ Bài 02.">B. Vì Nest bọc sẵn một lớp bắt lỗi quanh handler, đổi exception thành response chuẩn</button>
+    <button class="opt" data-correct="false" data-explain="Node không hề thay đổi hành vi — vẫn là Node v22 đó, vẫn giết tiến trình khi có unhandled rejection. Thứ thay đổi là Nest đã bắt lỗi TRƯỚC khi nó kịp trở thành unhandled.">C. Vì Node tự động bắt lỗi trong ứng dụng Nest</button>
+    <div class="feedback"></div>
+
+    <div class="q">Câu 3. <code>GET /courses/abc</code> trả <code>400</code> kèm "numeric string is expected". Ai tạo ra phản hồi đó?</div>
+    <button class="opt" data-correct="false" data-explain="Service không hề chạy. Request bị chặn TRƯỚC khi vào tới hàm findOne — đó mới là điểm hay: dữ liệu bẩn bị chặn ngay ở biên, nghiệp vụ bên trong không cần biết tới nó.">A. <code>CoursesService.findOne</code> kiểm tra rồi trả về</button>
+    <button class="opt" data-correct="true" data-explain="Đúng. ParseIntPipe chạy TRƯỚC handler: nó thử đổi 'abc' thành số, thất bại, và tự ném BadRequestException. Nhờ vậy findOne(id: number) chắc chắn luôn nhận số thật. Đây là mẫu 'chặn dữ liệu bẩn ngay ở biên hệ thống' — Bài 11 sẽ mở rộng ra cả object với DTO + ValidationPipe.">B. <code>ParseIntPipe</code>, chạy trước handler và tự ném lỗi khi đổi kiểu thất bại</button>
+    <button class="opt" data-correct="false" data-explain="TypeScript biến mất hoàn toàn sau khi biên dịch — lúc chạy thật không còn kiểm tra kiểu nào. Đây chính là lý do phải có pipe: kiểm tra kiểu ở RUNTIME, thứ mà TypeScript không làm được.">C. TypeScript, vì tham số khai báo là <code>number</code></button>
+    <div class="feedback"></div>
+
+    <div class="q">Câu 4. Controller dùng <code>this.coursesService</code> nhưng ta chưa hề gọi <code>new CoursesService()</code>. Vì sao có?</div>
+    <button class="opt" data-correct="false" data-explain="Không có ma thuật nào cả — và đừng bao giờ chấp nhận câu trả lời 'framework tự làm'. Có một cơ chế cụ thể, đọc được, gọi tên được.">A. Nest tự động tạo mọi class trong dự án</button>
+    <button class="opt" data-correct="true" data-explain="Đúng. Nest đọc providers trong @Module để biết nó ĐƯỢC PHÉP tạo gì, đọc constructor để biết controller CẦN gì, rồi lắp vào. Mặc định mỗi provider chỉ một thể hiện dùng chung — quan trọng khi service giữ thứ đắt tiền như kết nối database.">B. Nest đọc <code>providers</code> trong <code>@Module</code> và <code>constructor</code> của controller, rồi tự tạo và tiêm vào</button>
+    <button class="opt" data-correct="false" data-explain="Decorator @Injectable() chỉ ĐÁNH DẤU rằng class này có thể được tiêm — nó không tự đăng ký. Bằng chứng: bỏ CoursesService khỏi providers thì dù vẫn còn @Injectable(), Nest sẽ báo 'can't resolve dependencies'.">C. Vì <code>@Injectable()</code> tự đăng ký class vào toàn ứng dụng</button>
+    <div class="feedback"></div>
+
+    <div class="q">Câu 5. Khởi động Nest, bảng route <strong>không</strong> có dòng <code>Mapped {/courses, GET}</code>. Nhìn đâu trước?</div>
+    <button class="opt" data-correct="false" data-explain="Logic bên trong không liên quan. Route không được ĐĂNG KÝ thì handler không bao giờ được gọi — có sửa logic cả ngày cũng vô ích. Phân biệt 'chưa được gọi' với 'gọi rồi nhưng sai' là kỹ năng debug quan trọng.">A. Xem lại logic trong <code>CoursesService</code></button>
+    <button class="opt" data-correct="true" data-explain="Đúng. Bảng route phản ánh những gì Nest ĐÃ ĐĂNG KÝ. Thiếu dòng nghĩa là lỗi ở khâu khai báo, gần như luôn là: quên CoursesModule trong imports của AppModule, hoặc quên CoursesController trong controllers. Nhìn đúng chỗ tiết kiệm hàng giờ đoán mò.">B. Kiểm <code>imports</code> của <code>AppModule</code> và <code>controllers</code> của <code>CoursesModule</code></button>
+    <button class="opt" data-correct="false" data-explain="Cổng chỉ quyết định server nghe ở đâu, không ảnh hưởng tới việc route có được đăng ký hay không. Nếu sai cổng thì mọi route đều không gọi được, chứ không phải thiếu đúng một dòng trong bảng.">C. Kiểm cổng trong <code>main.ts</code></button>
+    <div class="feedback"></div>
+  </div>
+
+  <div class="callout tip">
+    <div class="ct">✅ Dự án của bạn vừa lớn thêm</div>
+    <ul class="checklist">
+      <li><code>elearning-api</code> có <strong>endpoint khoá học thật</strong> trong <code>src/</code>, không còn <code>lab/</code></li>
+      <li>Lọc theo query: <code>GET /courses?level=nang-cao</code></li>
+      <li>Lấy một khoá theo id, tự trả <code>404</code> đúng chuẩn khi không có</li>
+      <li>Tự chặn id sai kiểu bằng <code>400</code> — dòng validate đầu tiên của dự án</li>
+      <li>Hiểu Module/Controller/Service và DI ở mức <em>giải thích được vì sao</em>, không phải học thuộc</li>
+    </ul>
+  </div>
+
+  <h2>6. Câu hỏi tư duy (bắc cầu sang Bài 06)</h2>
+
+  <p>
+    Dữ liệu khoá học đang nằm trong một mảng cứng giữa <code>CoursesService</code>. Rõ ràng là tạm.
+    Nhưng trước khi thay bằng database, có một câu phải trả lời trước:
+  </p>
+  <p>
+    Giờ ta thêm <code>POST /courses</code> để tạo khoá học mới. Client gửi lên
+    <code>{ "title": "abc", "price": "rất rẻ" }</code> — <code>price</code> là chuỗi, không phải số.
+    <strong>Ai chặn nó lại?</strong> <code>ParseIntPipe</code> chỉ lo được một tham số trên đường dẫn,
+    còn đây là cả một object trong body.
+  </p>
+  <p>
+    Và câu hỏi nặng hơn: nếu <em>không</em> chặn, dữ liệu bẩn sẽ đi tới đâu — và bạn sẽ phát hiện ra nó
+    ở giai đoạn nào? Lúc ghi vào database, lúc người dùng xem trang, hay lúc tính tiền?
+  </p>
+
+  <div class="next-box">
+    <div class="nl">→ Bài tiếp theo</div>
+    <div class="nt">Bài 06 · DTO + ValidationPipe: chặn dữ liệu bẩn ngay ở biên hệ thống</div>
+    <p class="nd">Thêm <code>POST /courses</code> vào e-learning, và dựng hàng rào kiểm tra dữ liệu vào — để nghiệp vụ bên trong không bao giờ phải hỏi "cái này có đáng tin không".</p>
+  </div>
+
+  <div class="navbar">
+    <a href="0004-async-va-loi.html">← Trước</a>
+    <a href="index.html">🏠 Mục lục</a>
+    <a href="0006-dto-validation.html">Sau →</a>
+  </div>
+
+  <p class="try-it">
+    💬 <strong>Chạy tới đâu thấy lạ thì hỏi ngay.</strong> Không có bài tập phải nộp — gõ 4 file,
+    thấy bảng route hiện đủ 2 dòng <code>/courses</code> và <code>curl</code> ra JSON là bạn đã có
+    endpoint thật đầu tiên. Muốn chắc thì gửi đáp án 5 câu quiz.
+  </p>
+
+</div>
+<script src="lesson-enhance.js"></script>
+</body>
+</html>
