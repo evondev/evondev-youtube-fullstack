@@ -196,6 +196,12 @@ vào dự án e-learning"*.
 - Từ đây **mỗi bài phải đắp một mẩu CHẠY ĐƯỢC vào `elearning-api/src/`**, hết thời kỳ `lab/`.
 - Nhịp mỗi bài: *khái niệm NestJS → giải thích vì sao → áp thẳng vào e-learning*.
 
+### 📌 Swagger — đã đề nghị chèn sớm, Tuấn nói KHÔNG (2026-08-25)
+
+Đã hỏi có chèn Swagger/OpenAPI ngay sau Bài 07 không → Tuấn: *"cứ theo hiện tại thôi"*.
+**Giữ nguyên lộ trình, đừng đề nghị lại.** Khi nào tới phần "tài liệu API" theo MISSION thì làm,
+hoặc khi Tuấn chủ động hỏi.
+
 ### 🚦 Khi Tuấn bảo "soạn bài mới" → SOẠN LUÔN (Tuấn chốt 2026-08-07)
 
 **Không hỏi lại "tại sao", không chất vấn thứ tự, không đòi điều kiện tiên quyết** (kiểu "bài trước chưa
