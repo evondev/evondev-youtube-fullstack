@@ -1,0 +1,390 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Bài 04 · Async trong Node: callback → Promise → async/await, và lỗi đi đâu</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="lesson.css">
+</head>
+<body>
+<div class="wrap">
+
+  <span class="lesson-tag">Module 1 · Bài 04</span>
+  <h1>Async trong Node: callback → Promise → async/await, và lỗi đi đâu</h1>
+  <p class="subtitle">Bạn viết <code>async/await</code> hàng ngày ở frontend rồi. Bài này về đúng cái phần bạn chưa từng phải nghĩ tới: khi nó hỏng, <em>lỗi rơi vào tay ai</em> — hay không rơi vào tay ai cả.</p>
+  <p class="meta-line">⏱ ~40 phút · 🎯 Mục tiêu: nhìn một đoạn code async là chỉ ra được ngay lỗi của nó sẽ đi đâu, và vì sao <code>try/catch</code> đặt đúng chỗ trông rất hợp lý lại bắt trượt.</p>
+
+  <div class="callout bridge">
+    <div class="ct">🌉 Bắc cầu — bài này gom hai món nợ lại trả một lần</div>
+    <p>
+      <strong>Nợ thứ nhất, từ Bài 02:</strong> bạn xoá <code>try/catch</code> quanh
+      <code>JSON.parse</code> và cả tiến trình chết. Lúc đó tôi nói "lỗi trong hàm <code>async</code> thành
+      promise bị từ chối mà không ai bắt" — rồi hẹn giải thích sau. Giờ là lúc đó.
+    </p>
+    <p>
+      <strong>Nợ thứ hai, từ Bài 03:</strong> vì sao microtask luôn chạy trước timer.
+    </p>
+    <p style="margin-bottom:0">
+      Bài này <strong>không dạy cú pháp</strong> <code>async/await</code> — bạn dùng nó ở React lâu rồi.
+      Nó dạy đúng một thứ: <strong>đường đi của lỗi trong code bất đồng bộ</strong>. Ở frontend, sai chỗ này
+      thì một component hiện sai. Ở backend, sai chỗ này thì <em>cả server tắt</em> — bạn đã thấy tận mắt
+      ở Bài 02.
+    </p>
+  </div>
+
+  <h2>1. Thí nghiệm: <code>try/catch</code> ôm trọn mà vẫn bắt trượt</h2>
+
+  <p>
+    Tạo <code>lab/04-loi-di-dau.mjs</code>. Đọc kỹ và <strong>đoán trước</strong> xem in ra gì:
+  </p>
+
+  <div class="code-block">
+    <span class="code-label">elearning-api/lab/04-loi-di-dau.mjs</span>
+<pre><code><span class="cmt">// try ôm TRỌN VẸN lời gọi setTimeout. Nhìn thì không thể lọt được.</span>
+<span class="kw">try</span> {
+  <span class="fn">setTimeout</span>(() => {
+    <span class="kw">throw new</span> <span class="fn">Error</span>(<span class="str">'No ra BEN TRONG callback'</span>);
+  }, <span class="num">100</span>);
+
+  console.<span class="fn">log</span>(<span class="str">'try chay xong (khong co loi nao o day)'</span>);
+} <span class="kw">catch</span> (loi) {
+  console.<span class="fn">log</span>(<span class="str">'BAT DUOC:'</span>, loi.message);
+}
+
+<span class="cmt">// Dòng này để kiểm tra: tiến trình còn sống thì nó phải in ra.</span>
+<span class="fn">setTimeout</span>(() => console.<span class="fn">log</span>(<span class="str">'dong nay co chay khong?'</span>), <span class="num">500</span>);</code></pre>
+  </div>
+
+  <div class="code-block">
+    <span class="code-label">bash</span>
+<pre><code><span class="kw">cd</span> ~/Documents/youtube/fullstack/elearning-api
+node lab/04-loi-di-dau.mjs; <span class="fn">echo</span> <span class="str">"exit=</span>$?<span class="str">"</span></code></pre>
+  </div>
+
+  <div class="code-block">
+    <span class="code-label">output THẬT (đã verify, Node v22.18.0)</span>
+<pre><code>try chay xong (khong co loi nao o day)
+
+Error: No ra BEN TRONG callback
+    at Timeout._onTimeout (file:///.../lab/04-loi-di-dau.mjs:<span class="num">4</span>:<span class="num">11</span>)
+    at listOnTimeout (node:internal/timers:<span class="num">588</span>:<span class="num">17</span>)
+    at process.processTimers (node:internal/timers:<span class="num">523</span>:<span class="num">7</span>)
+
+exit=<span class="num">1</span></code></pre>
+  </div>
+
+  <p>
+    Ba thứ đáng chú ý: khối <code>catch</code> <strong>không hề chạy</strong>; tiến trình
+    <strong>chết</strong> (<code>exit=1</code>); và dòng <code>'dong nay co chay khong?'</code>
+    <strong>không bao giờ in ra</strong>.
+  </p>
+
+  <h2>2. Bằng chứng nằm ngay trong stack trace</h2>
+
+  <p>
+    Đừng tin lời giải thích — đọc lại 3 dòng stack trace ở trên. Nó kể chính xác ai đã gọi cái callback đó:
+  </p>
+
+  <div class="code-block">
+    <span class="code-label">đọc từ dưới lên</span>
+<pre><code>    at process.processTimers      <span class="cmt">&lt;-- 1. Node kiem tra "timer nao toi han?"</span>
+    at listOnTimeout              <span class="cmt">&lt;-- 2. Node lay callback ra</span>
+    at Timeout._onTimeout         <span class="cmt">&lt;-- 3. Node GOI callback cua ban</span>
+                                  <span class="cmt">&lt;-- KHONG CO DONG NAO NHAC TOI khoi try!</span></code></pre>
+  </div>
+
+  <div class="callout why">
+    <div class="ct">💡 Vì sao <code>try/catch</code> vô can ở đây</div>
+    <p>
+      <code>try/catch</code> bảo vệ theo <strong>thời gian chạy</strong>, không phải theo
+      <strong>vị trí trong file</strong>. Nó chỉ bắt được lỗi xảy ra <em>trong lúc khối <code>try</code>
+      đang chạy</em>.
+    </p>
+    <p>
+      Mà <code>setTimeout(...)</code> chỉ làm đúng một việc: <em>đăng ký</em> callback rồi trả về ngay
+      lập tức. Khối <code>try</code> chạy xong, in ra dòng log, và <strong>kết thúc</strong>. 100ms sau,
+      event loop mới lôi callback ra chạy — lúc đó khối <code>try</code> đã biến mất khỏi stack từ lâu.
+      Callback chạy trên một <strong>stack hoàn toàn mới</strong>, bắt đầu từ hệ thống timer của Node,
+      như stack trace vừa chứng minh.
+    </p>
+    <p style="margin-bottom:0">
+      Nhớ câu này: <strong><code>try/catch</code> không đợi được. Nó chỉ bắt cái gì nổ ngay bây giờ.</strong>
+      Cả bài này là hệ quả của đúng một câu đó.
+    </p>
+  </div>
+
+  <h2>3. Ba thế hệ, ba "hợp đồng lỗi" khác nhau</h2>
+
+  <p>
+    Vấn đề trên không mới — nó có từ ngày đầu của Node. Ba thế hệ cú pháp async thật ra là
+    <strong>ba lần trả lời cùng một câu hỏi: lỗi bất đồng bộ giao lại cho bạn bằng đường nào?</strong>
+  </p>
+
+  <table class="data">
+    <thead><tr><th>Thế hệ</th><th>Lỗi đi đường nào</th><th>Hỏng khi nào</th></tr></thead>
+    <tbody>
+      <tr>
+        <td><strong>Callback</strong><br><code>fn(err, data) =&gt; {}</code></td>
+        <td>Lỗi được <em>truyền vào</em> làm <strong>tham số đầu tiên</strong>. Đây là lý do có quy ước "error-first" — không có cách nào khác để đưa lỗi về.</td>
+        <td>Bạn <span class="nullcell">quên kiểm tra <code>err</code></span> → lỗi bị nuốt im lặng, code chạy tiếp với dữ liệu rỗng.</td>
+      </tr>
+      <tr>
+        <td><strong>Promise</strong><br><code>.then().catch()</code></td>
+        <td>Lỗi làm promise <em>chuyển sang trạng thái rejected</em>, chảy dọc chuỗi tới <code>.catch()</code> gần nhất.</td>
+        <td>Chuỗi <span class="nullcell">không có <code>.catch()</code> nào</span> → unhandled rejection → Node giết tiến trình.</td>
+      </tr>
+      <tr>
+        <td><strong>async/await</strong><br><code>try/catch</code></td>
+        <td><code>await</code> <em>ném lại</em> lỗi đó ra tại đúng chỗ bạn viết <code>await</code> — nên <code>try/catch</code> bắt được trở lại.</td>
+        <td>Bạn <span class="nullcell">quên chữ <code>await</code></span> → xem phần 4, đây là cái bẫy đắt nhất.</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="callout tip">
+    <div class="ct">🔎 Chốt lại cho gọn</div>
+    <p style="margin-bottom:0">
+      <code>async/await</code> không phải "cú pháp đẹp hơn cho dễ đọc". Giá trị thật của nó là
+      <strong>trả lại cho bạn quyền dùng <code>try/catch</code></strong> — thứ đã mất suốt thời kỳ
+      callback. Nhưng nó chỉ trả lại <em>khi bạn thật sự <code>await</code></em>. Không await thì bạn
+      rơi ngược về thế hệ Promise mà không hay biết.
+    </p>
+  </div>
+
+  <h2>4. Cái bẫy đắt nhất: quên một chữ <code>await</code></h2>
+
+  <p>Tạo <code>lab/04-quen-await.mjs</code>:</p>
+
+  <div class="code-block">
+    <span class="code-label">elearning-api/lab/04-quen-await.mjs</span>
+<pre><code><span class="kw">async function</span> <span class="fn">layKhoaHoc</span>() {
+  <span class="kw">throw new</span> <span class="fn">Error</span>(<span class="str">'Database sap'</span>);
+}
+
+<span class="kw">try</span> {
+  <span class="fn">layKhoaHoc</span>();                       <span class="cmt">// &lt;-- THIEU chu await</span>
+  console.<span class="fn">log</span>(<span class="str">'try chay xong binh thuong (!!)'</span>);
+} <span class="kw">catch</span> (loi) {
+  console.<span class="fn">log</span>(<span class="str">'BAT DUOC:'</span>, loi.message);
+}</code></pre>
+  </div>
+
+  <div class="code-block">
+    <span class="code-label">output THẬT (đã verify)</span>
+<pre><code>try chay xong binh thuong (!!)
+
+Error: Database sap
+    at layKhoaHoc (file:///.../lab/04-quen-await.mjs:<span class="num">2</span>:<span class="num">9</span>)
+
+exit=<span class="num">1</span></code></pre>
+  </div>
+
+  <p>
+    Giờ thêm đúng <strong>một chữ <code>await</code></strong> vào dòng đó rồi chạy lại:
+  </p>
+
+  <div class="code-block">
+    <span class="code-label">output THẬT sau khi thêm <code>await</code></span>
+<pre><code>BAT DUOC: Database sap
+chuong trinh chay tiep binh thuong
+
+exit=<span class="num">0</span></code></pre>
+  </div>
+
+  <div class="callout danger">
+    <div class="ct">🚨 Vì sao đây là bug khó thấy nhất trong ba cái</div>
+    <p>
+      Thiếu <code>await</code> thì hàm vẫn chạy, vẫn trả về một thứ (một <code>Promise</code>), và
+      <strong>không có cảnh báo nào lúc gõ code</strong>. Ở frontend nó thường chỉ làm state cập nhật
+      trễ. Ở backend, chuỗi hậu quả nặng hơn hẳn:
+    </p>
+    <ul>
+      <li>Khối <code>try</code> chạy tới cuối bình thường → code của bạn tưởng là <strong>thành công</strong></li>
+      <li>Bạn trả <code>200 OK</code> cho client trong khi việc <em>đã hỏng</em></li>
+      <li>Vài mili-giây sau, promise bị từ chối không ai bắt → <strong>tiến trình chết</strong></li>
+    </ul>
+    <p style="margin-bottom:0">
+      <strong>Nói dối với client rồi mới chết.</strong> Đây là lý do quên <code>await</code> nguy hiểm
+      hơn hẳn một lỗi làm sập ngay: monitoring thấy <code>200</code>, client thấy thành công, mà việc
+      thì đã hỏng.
+    </p>
+  </div>
+
+  <h2>5. Trả nốt món nợ Bài 03: vì sao microtask chạy trước timer</h2>
+
+  <p>Tạo <code>lab/04-thu-tu.mjs</code>:</p>
+
+  <div class="code-block">
+    <span class="code-label">elearning-api/lab/04-thu-tu.mjs</span>
+<pre><code>console.<span class="fn">log</span>(<span class="str">'1 - dong bo'</span>);
+<span class="fn">setTimeout</span>(() => console.<span class="fn">log</span>(<span class="str">'5 - macrotask (timer)'</span>), <span class="num">0</span>);
+<span class="fn">Promise.resolve</span>().<span class="fn">then</span>(() => console.<span class="fn">log</span>(<span class="str">'3 - microtask 1'</span>));
+<span class="fn">Promise.resolve</span>().<span class="fn">then</span>(() => console.<span class="fn">log</span>(<span class="str">'4 - microtask 2'</span>));
+console.<span class="fn">log</span>(<span class="str">'2 - dong bo'</span>);</code></pre>
+  </div>
+
+  <div class="code-block">
+    <span class="code-label">output THẬT (đã verify)</span>
+<pre><code><span class="num">1</span> - dong bo
+<span class="num">2</span> - dong bo
+<span class="num">3</span> - microtask <span class="num">1</span>
+<span class="num">4</span> - microtask <span class="num">2</span>
+<span class="num">5</span> - macrotask (timer)</code></pre>
+  </div>
+
+  <p>Node có <strong>hai hàng đợi riêng</strong>, với luật ưu tiên rất dứt khoát:</p>
+
+  <table class="data">
+    <thead><tr><th></th><th>Microtask</th><th>Macrotask</th></tr></thead>
+    <tbody>
+      <tr><td>Gồm những gì</td><td><code>.then()</code>, <code>await</code>, <code>queueMicrotask</code></td><td><code>setTimeout</code>, <code>setInterval</code>, I/O, <code>setImmediate</code></td></tr>
+      <tr><td>Khi nào được chạy</td><td>Ngay khi code đồng bộ vừa xong — <strong>trước khi</strong> event loop đi tiếp</td><td>Ở vòng lặp kế tiếp của event loop</td></tr>
+      <tr><td>Chạy bao nhiêu cái</td><td><span class="nullcell">VÉT SẠCH hàng đợi</span>, kể cả cái mới sinh ra trong lúc chạy</td><td>Thường một nhóm rồi nhường lượt</td></tr>
+    </tbody>
+  </table>
+
+  <div class="callout warn">
+    <div class="ct">⚠️ "Vét sạch" là chỗ có thể tự bắn vào chân</div>
+    <p style="margin-bottom:0">
+      Vì microtask được vét sạch <em>trước khi</em> event loop đi tiếp, một microtask liên tục sinh ra
+      microtask mới sẽ làm event loop <strong>không bao giờ tới được bước tiếp theo</strong> — hệ quả
+      giống hệt vòng <code>while</code> ở Bài 03: server đứng hình, CPU 100%, không lỗi.
+      Nối lại với Bài 03: <em>bận</em> thì chặn, và microtask vô hạn cũng là một kiểu "bận".
+    </p>
+  </div>
+
+  <h2>6. Lưới an toàn cuối cùng — và vì sao nó <em>không</em> phải cách sửa</h2>
+
+  <p>
+    Node cho bạn bắt các promise bị từ chối mà không ai xử lý. Tạo <code>lab/04-luoi-an-toan.mjs</code>:
+  </p>
+
+  <div class="code-block">
+    <span class="code-label">elearning-api/lab/04-luoi-an-toan.mjs</span>
+<pre><code><span class="cmt">// Bắt MỌI promise bị từ chối mà không có .catch() nào.</span>
+process.<span class="fn">on</span>(<span class="str">'unhandledRejection'</span>, (lyDo) => {
+  console.<span class="fn">log</span>(<span class="str">'[LUOI AN TOAN] tom duoc:'</span>, lyDo.message);
+  <span class="cmt">// Vẫn thoát — có chủ đích. Xem giải thích bên dưới.</span>
+  process.<span class="fn">exit</span>(<span class="num">1</span>);
+});
+
+<span class="kw">async function</span> <span class="fn">hong</span>() { <span class="kw">throw new</span> <span class="fn">Error</span>(<span class="str">'Loi khong ai bat'</span>); }
+
+<span class="fn">hong</span>();</code></pre>
+  </div>
+
+  <div class="code-block">
+    <span class="code-label">output THẬT (đã verify)</span>
+<pre><code>[LUOI AN TOAN] tom duoc: Loi khong ai bat
+exit=<span class="num">1</span></code></pre>
+  </div>
+
+  <div class="callout danger">
+    <div class="ct">🚨 Đừng dùng cái này để "cho server khỏi chết"</div>
+    <p>
+      Phản xạ đầu tiên của ai cũng là: bỏ <code>process.exit(1)</code> đi, ghi log rồi chạy tiếp — thế là
+      server bất tử. <strong>Đó là một cái bẫy.</strong>
+    </p>
+    <p>
+      Vì một promise bị từ chối giữa chừng nghĩa là <strong>có một đoạn việc đã dừng ở lưng chừng</strong>:
+      tiền đã trừ mà khoá học chưa được ghi danh, transaction mở mà chưa đóng, file đã ghi một nửa.
+      Tiến trình chạy tiếp với trạng thái đó thì nó <em>còn nguy hiểm hơn</em> một tiến trình đã chết —
+      chết thì bạn biết mà sửa, sống mà sai thì dữ liệu hỏng âm thầm.
+    </p>
+    <p style="margin-bottom:0">
+      <strong>Dùng lưới này để LOG, không phải để SỐNG SÓT.</strong> Nó là chỗ bạn ghi lại đủ thông tin
+      trước khi chết. Cách sửa thật vẫn là <code>try/catch</code> đặt đúng chỗ, ở đúng biên của mỗi
+      request. Còn "chết cho tử tế" — trả nốt request đang dở rồi mới tắt — chính là
+      <strong>graceful shutdown</strong>, nội dung Bài 05.
+    </p>
+  </div>
+
+  <div class="quiz">
+    <h3>🧠 Kiểm tra nhanh (bấm để có phản hồi ngay)</h3>
+
+    <div class="q">Câu 1. Vì sao <code>try/catch</code> ở phần 1 không bắt được lỗi ném ra trong callback của <code>setTimeout</code>?</div>
+    <button class="opt" data-correct="false" data-explain="Không liên quan tới việc lỗi thuộc loại nào. Vẫn là Error bình thường — nếu ném ra đồng bộ ngay trong khối try thì catch bắt được ngay.">A. Vì lỗi trong callback là loại lỗi đặc biệt, <code>catch</code> không nhận</button>
+    <button class="opt" data-correct="true" data-explain="Đúng. try/catch bảo vệ theo THỜI GIAN CHẠY chứ không theo vị trí trong file. setTimeout chỉ đăng ký callback rồi trả về ngay; khối try kết thúc và rời khỏi stack. 100ms sau event loop mới gọi callback trên một stack MỚI — stack trace đã chứng minh: nó bắt đầu từ process.processTimers, không có dòng nào nhắc tới khối try.">B. Vì lúc callback chạy, khối <code>try</code> đã kết thúc và rời khỏi stack từ lâu</button>
+    <button class="opt" data-correct="false" data-explain="Ngược lại — callback chạy SAU khối try, không phải trước. Và thứ tự cũng không phải vấn đề: vấn đề là hai đoạn code chạy trên hai stack hoàn toàn khác nhau, không có quan hệ bao bọc nào.">C. Vì callback chạy trước khối <code>try</code></button>
+    <div class="feedback"></div>
+
+    <div class="q">Câu 2. Trong handler, bạn viết <code>truyVanDatabase();</code> mà quên <code>await</code>. Hàm đó sẽ ném lỗi sau 100ms. Client nhận gì?</div>
+    <button class="opt" data-correct="false" data-explain="Không. Khối try chạy tới cuối trót lọt vì lỗi chưa xảy ra lúc đó — catch không hề chạy. Đây chính là chỗ làm bug này khó thấy.">A. <code>500</code>, vì <code>catch</code> vẫn bắt được</button>
+    <button class="opt" data-correct="true" data-explain="Đúng, và đây là kịch bản tệ nhất trong ba kiểu lỗi async. Không await nghĩa là code chạy tiếp ngay, trả 200 cho client trong khi việc đã hỏng — bạn vừa NÓI DỐI client. Rồi 100ms sau promise bị từ chối không ai bắt, tiến trình chết theo. Bạn đã thấy đúng chuỗi này ở phần 4.">B. <code>200 OK</code> — rồi vài mili-giây sau tiến trình chết</button>
+    <button class="opt" data-correct="false" data-explain="Client vẫn nhận được response — response.end() đã chạy xong từ trước khi lỗi xảy ra. Treo là kịch bản khác: nhánh code không hề kết thúc response (luật Bài 01), không phải của việc quên await.">C. Không nhận gì cả, request bị treo</button>
+    <div class="feedback"></div>
+
+    <div class="q">Câu 3. Giá trị lớn nhất mà <code>async/await</code> mang lại so với callback là gì?</div>
+    <button class="opt" data-correct="false" data-explain="Không nhanh hơn một mili-giây nào. Cùng một event loop, cùng cơ chế bên dưới — async/await chỉ là cách viết khác cho Promise, không đổi hiệu năng.">A. Chạy nhanh hơn vì được tối ưu ở tầng engine</button>
+    <button class="opt" data-correct="true" data-explain="Đúng — và đây mới là giá trị thật, không phải chuyện 'đỡ lồng nhau cho dễ đọc'. Thời callback, lỗi phải đi qua tham số err và bạn phải tự kiểm tra thủ công ở từng tầng; quên một chỗ là lỗi biến mất. await ném lại lỗi tại đúng chỗ bạn viết nó, nên try/catch — công cụ xử lý lỗi tiêu chuẩn của JS — dùng được trở lại. Với điều kiện bạn nhớ await.">B. Trả lại khả năng dùng <code>try/catch</code> cho code bất đồng bộ</button>
+    <button class="opt" data-correct="false" data-explain="Không hề. Bạn đã thấy ở phần 4: quên một chữ await là tiến trình chết. async/await không tự bảo vệ bạn — nó chỉ cho bạn công cụ để tự bảo vệ.">C. Tự động bắt mọi lỗi nên không cần xử lý nữa</button>
+    <div class="feedback"></div>
+
+    <div class="q">Câu 4. Nên dùng <code>process.on('unhandledRejection')</code> để ghi log rồi cho server chạy tiếp, khỏi chết?</div>
+    <button class="opt" data-correct="false" data-explain="Nghe rất hợp lý và rất nhiều người làm vậy — nhưng đây là bẫy. Promise bị từ chối nghĩa là có một đoạn việc đã dừng ở lưng chừng: tiền đã trừ mà chưa ghi danh, transaction mở chưa đóng. Chạy tiếp với trạng thái đó thì dữ liệu hỏng âm thầm, tệ hơn nhiều so với việc chết hẳn.">A. Nên — server không bao giờ chết là mục tiêu cao nhất</button>
+    <button class="opt" data-correct="true" data-explain="Đúng. Dùng lưới này để LOG, không phải để SỐNG SÓT — nó là chỗ ghi lại đủ thông tin trước khi chết. Cách sửa thật là try/catch đặt đúng ở biên mỗi request. Còn 'chết cho tử tế' (trả nốt request đang dở rồi mới tắt) là graceful shutdown — Bài 05.">B. Không — dùng để ghi log rồi vẫn thoát; chạy tiếp với trạng thái dở dang còn nguy hiểm hơn</button>
+    <button class="opt" data-correct="false" data-explain="Nó vẫn rất hữu ích — như một lưới cuối cùng để bạn biết mình đã bỏ sót chỗ nào. Vấn đề không phải là có nên dùng, mà là dùng nó để làm gì: để log, không phải để giả vờ rằng lỗi không xảy ra.">C. Không nên dùng nó trong bất kỳ trường hợp nào</button>
+    <div class="feedback"></div>
+
+    <div class="q">Câu 5. <code>setTimeout(fn, 0)</code> và <code>Promise.resolve().then(fn)</code> cùng được đăng ký. Cái nào chạy trước, vì sao?</div>
+    <button class="opt" data-correct="true" data-explain="Đúng. Microtask được vét SẠCH ngay khi code đồng bộ vừa xong, trước khi event loop bước sang vòng kế tiếp — nơi timer mới được xử lý. Bạn đã tự chạy ra thứ tự 1,2,3,4,5 ở phần 5. Hệ quả đáng nhớ: một microtask liên tục sinh ra microtask mới sẽ làm event loop không bao giờ đi tiếp — đứng hình y như vòng while ở Bài 03.">A. Promise — microtask được vét sạch trước khi event loop sang vòng kế tiếp</button>
+    <button class="opt" data-correct="false" data-explain="Không. Số 0 chỉ có nghĩa 'sớm nhất có thể', và như Bài 03 đã đo, nó có thể chạy sau 2000ms. Thứ tự ở đây do luật ưu tiên giữa hai hàng đợi quyết định, không do con số delay.">B. <code>setTimeout</code> — vì delay bằng 0 nên nó tới hạn ngay lập tức</button>
+    <button class="opt" data-correct="false" data-explain="Hoàn toàn xác định, không hề ngẫu nhiên. Chạy lại bao nhiêu lần cũng ra 1,2,3,4,5. Đây là luật của spec, không phải chuyện may rủi — nếu là ngẫu nhiên thì không ai debug nổi Node.">C. Không xác định — tuỳ lần chạy</button>
+    <div class="feedback"></div>
+  </div>
+
+  <div class="callout tip">
+    <div class="ct">✅ Bạn vừa đạt được</div>
+    <ul class="checklist">
+      <li>Giải thích được vì sao <code>try/catch</code> ôm trọn <code>setTimeout</code> vẫn bắt trượt — và đọc stack trace để chứng minh</li>
+      <li>Chỉ ra được "hợp đồng lỗi" của cả ba thế hệ, và mỗi thế hệ hỏng ở đâu</li>
+      <li>Thấy tận mắt quên một chữ <code>await</code> làm server trả <code>200</code> rồi mới chết</li>
+      <li>Trả lời được vì sao microtask luôn chạy trước timer</li>
+      <li>Biết <code>unhandledRejection</code> là chỗ để <em>log</em>, không phải chỗ để né chết</li>
+    </ul>
+  </div>
+
+  <h2>7. Câu hỏi tư duy (bắc cầu sang Bài 05)</h2>
+
+  <p>
+    Suốt bốn bài vừa rồi, mỗi lần server chết là nó chết <strong>ngay lập tức, giữa chừng</strong>.
+    Nhưng hãy nghĩ về khoảnh khắc đó ở production: lúc tiến trình tắt, có thể đang có 50 request dở dang
+    — người đang thanh toán, người đang upload video.
+  </p>
+  <p>
+    Và không chỉ lúc lỗi. <strong>Mỗi lần bạn deploy phiên bản mới, bạn cũng tắt tiến trình cũ</strong> —
+    ngày mấy lần. Vậy: <em>làm sao tắt một server mà không làm rơi request đang dở?</em>
+  </p>
+  <p>
+    Thử nghĩ tiếp: khi bạn bấm <code>Ctrl+C</code>, chính xác thì <em>ai</em> nói với tiến trình rằng
+    "đến giờ tắt rồi"? Nó có quyền trả lời "khoan, đợi tôi 5 giây" không? Và nếu nó cứ lì ra không tắt,
+    thì ai là người có quyền cưỡng chế?
+  </p>
+  <p>
+    Bài 05 trả lời cả ba câu đó — và đó cũng là bài đầu tiên trong Module 1 mà code bạn viết
+    <strong>đi thẳng vào <code>src/</code> của API thật</strong>, không còn ở <code>lab/</code> nữa.
+  </p>
+
+  <div class="next-box">
+    <div class="nl">→ Bài tiếp theo</div>
+    <div class="nt">Bài 05 · Tiến trình server: env, tín hiệu tắt, graceful shutdown</div>
+    <p class="nd">Rời <code>lab/</code>, code đi thẳng vào API thật: đọc cấu hình từ môi trường, nghe tín hiệu tắt của hệ điều hành, và tắt mà không làm rơi một request nào.</p>
+  </div>
+
+  <div class="navbar">
+    <a href="0003-event-loop.html">← Trước</a>
+    <a href="index.html">🏠 Mục lục</a>
+    <a href="0005-nestjs-endpoint-dau-tien.html">Sau →</a>
+  </div>
+
+  <p class="try-it">
+    💬 <strong>Chạy tới đâu thấy lạ thì hỏi ngay.</strong> Không có bài tập phải nộp — chạy được
+    3 file thí nghiệm và đọc hiểu stack trace là đủ. Muốn chắc thì gửi đáp án 5 câu quiz.
+  </p>
+
+</div>
+<script src="lesson-enhance.js"></script>
+</body>
+</html>
