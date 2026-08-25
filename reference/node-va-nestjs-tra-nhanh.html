@@ -1,0 +1,354 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Cheat-sheet · Node core &amp; NestJS cải thiện gì</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../lessons/lesson.css">
+</head>
+<body>
+<div class="wrap">
+
+  <span class="lesson-tag">📄 Cheat-sheet · gom Bài 01 → 06</span>
+  <h1>Node core &amp; NestJS cải thiện gì — bản tra nhanh</h1>
+  <p class="subtitle">Ôn lại bản chất Node, và nhìn thẳng vào việc NestJS gỡ hộ bạn cái gì. In ra dán cạnh màn hình.</p>
+  <p class="meta-line">🖨 In được (Cmd+P) · Mọi output đã chạy thật trên máy bạn: Node v22.18.0 · NestJS 11.0.1 · class-validator 0.15.1</p>
+
+  <div class="callout bridge">
+    <div class="ct">🌉 Một câu tóm cả 6 bài</div>
+    <p style="margin-bottom:0">
+      Một web server chỉ là <strong>một hàm được gọi lại mỗi khi có văn bản HTTP tới</strong>, chạy trên
+      <strong>một luồng không được phép bận</strong>, trong đó <strong>lỗi bất đồng bộ không tự quay về
+      chỗ bạn đứng</strong>. NestJS không đổi ba sự thật đó — nó chỉ dựng sẵn giàn giáo quanh chúng.
+    </p>
+  </div>
+
+  <h2>1. Giải phẫu HTTP — luôn đúng 4 phần</h2>
+
+  <div class="code-block">
+    <span class="code-label">request &amp; response có cùng cấu trúc, chỉ khác dòng đầu</span>
+<pre><code>GET /courses?level=co-ban HTTP/1.1   <span class="cmt">&lt;- 1. dong dau (method + duong dan + phien ban)</span>
+Host: localhost:3333                 <span class="cmt">&lt;- 2. cac header</span>
+Content-Type: application/json
+                                     <span class="cmt">&lt;- 3. DONG TRONG (ranh gioi duy nhat!)</span>
+{<span class="str">"title"</span>:<span class="str">"abc"</span>}                     <span class="cmt">&lt;- 4. body (tuy chon)</span>
+
+HTTP/1.1 <span class="num">200</span> OK                       <span class="cmt">&lt;- response: phien ban + status + mo ta</span></code></pre>
+  </div>
+
+  <h2>2. Chọn status code trong 5 giây</h2>
+
+  <p>Nhớ chữ số đầu: <code>2xx</code> xong rồi · <code>3xx</code> đi chỗ khác · <code>4xx</code> <strong>bạn sai</strong> · <code>5xx</code> <strong>tôi sai</strong>.</p>
+
+  <table class="data">
+    <thead><tr><th>Mã</th><th>Dùng khi</th><th>Bẫy thường gặp</th></tr></thead>
+    <tbody>
+      <tr><td><code>200</code></td><td>Lấy được, sửa được</td><td>Tìm không ra kết quả <strong>vẫn là 200</strong> + mảng rỗng</td></tr>
+      <tr><td><code>201</code></td><td>Vừa tạo tài nguyên mới</td><td>Nên kèm <code>Location</code> trỏ tới thứ vừa tạo</td></tr>
+      <tr><td><code>204</code></td><td>Xong, cố ý không có body</td><td>Có gì để trả thì đừng dùng 204</td></tr>
+      <tr><td><code>400</code></td><td>Client gửi dữ liệu sai/bẩn</td><td><span class="nullcell">Đừng trả 500</span> — lỗi của họ, không phải của bạn</td></tr>
+      <tr><td><code>401</code></td><td>Chưa đăng nhập / token hỏng</td><td>Khác 403: 401 = <em>bạn là ai?</em></td></tr>
+      <tr><td><code>403</code></td><td>Biết bạn là ai, nhưng không cho</td><td>403 = <em>biết rồi, vẫn không được</em></td></tr>
+      <tr><td><code>404</code></td><td>Không có gì ở đường dẫn đó</td><td>Đừng dùng cho "lọc không ra kết quả"</td></tr>
+      <tr><td><code>405</code></td><td>Đúng path, sai method</td><td><strong>RFC bắt buộc</strong> kèm header <code>Allow</code></td></tr>
+      <tr><td><code>500</code></td><td>Lỗi của chính bạn</td><td>Trả sai 4xx/5xx = hệ thống cảnh báo thành vô dụng</td></tr>
+    </tbody>
+  </table>
+
+  <div class="callout tip">
+    <div class="ct">🔎 Ranh giới 4xx/5xx là ranh giới quan trọng nhất trong đời vận hành</div>
+    <p style="margin-bottom:0"><strong>4xx thì bạn ngủ tiếp. 5xx thì bạn dậy sửa.</strong> Đặt sai mã ở đây là tự phá hệ thống báo động của chính mình.</p>
+  </div>
+
+  <h2>3. <code>node:http</code> — cốt lõi</h2>
+
+  <div class="code-block">
+    <span class="code-label">server tối giản + 3 điều phải nhớ</span>
+<pre><code><span class="kw">import</span> { createServer } <span class="kw">from</span> <span class="str">'node:http'</span>;
+
+<span class="kw">const</span> server = <span class="fn">createServer</span>(<span class="kw">async</span> (request, response) => {
+  <span class="cmt">// (1) request.url la CHUOI THO, dinh ca query -> phai tach</span>
+  <span class="kw">const</span> url = <span class="kw">new</span> <span class="fn">URL</span>(request.url, <span class="str">`http://</span>${request.headers.host}<span class="str">`</span>);
+  url.pathname;                      <span class="cmt">// '/courses'</span>
+  url.searchParams.<span class="fn">get</span>(<span class="str">'level'</span>);    <span class="cmt">// 'co-ban' | null (KHONG phai undefined)</span>
+
+  <span class="cmt">// (2) body la STREAM, khong co san. Day chinh la "body parser".</span>
+  <span class="kw">let</span> raw = <span class="str">''</span>;
+  <span class="kw">for await</span> (<span class="kw">const</span> khuc <span class="kw">of</span> request) raw += khuc;
+  <span class="kw">try</span> { JSON.<span class="fn">parse</span>(raw); } <span class="kw">catch</span> { <span class="cmt">/* PHAI bat, khong la CHET CA SERVER */</span> }
+
+  <span class="cmt">// (3) MOI nhanh deu phai ket thuc response, khong la client treo</span>
+  response.<span class="fn">writeHead</span>(<span class="num">200</span>, { <span class="str">'Content-Type'</span>: <span class="str">'application/json; charset=utf-8'</span> });
+  response.<span class="fn">end</span>(JSON.<span class="fn">stringify</span>({ ok: <span class="kw">true</span> }));
+});
+
+server.<span class="fn">listen</span>(<span class="num">3333</span>);</code></pre>
+  </div>
+
+  <table class="data">
+    <thead><tr><th>Nhớ</th><th>Vì sao</th></tr></thead>
+    <tbody>
+      <tr><td><code>request.url</code> ≠ đường dẫn</td><td>Dính query string. <code>'/ping?a=1' === '/ping'</code> là <code>false</code></td></tr>
+      <tr><td><code>request.body</code> là <code>undefined</code></td><td><code>method</code>/<code>url</code> ở dòng đầu <em>đã tới</em>; body tới sau và có thể rất lớn → Node đưa <em>stream</em></td></tr>
+      <tr><td>Body 5MB → ~83 khúc</td><td>Số khúc <strong>đổi mỗi lần chạy</strong> — đừng bao giờ giả định "về một lần"</td></tr>
+      <tr><td>Quên <code>response.end()</code></td><td>Client treo, server vẫn "xanh" — nguy hiểm hơn crash vì monitoring không thấy gì</td></tr>
+      <tr><td><code>writeHead</code> rồi không đổi được</td><td>Header đã lên dây → <code>ERR_HTTP_HEADERS_SENT</code>. Mọi kiểm tra phải làm <em>trước</em></td></tr>
+    </tbody>
+  </table>
+
+  <h2>4. ⭐ Node thuần vs NestJS — cùng một việc</h2>
+
+  <table class="data">
+    <thead><tr><th>Việc</th><th>Node thuần (Bài 02)</th><th>NestJS (Bài 05–06)</th></tr></thead>
+    <tbody>
+      <tr><td>Khớp đường dẫn</td><td><code>new URL(...)</code> + so <code>pathname</code></td><td><code>@Controller('courses')</code></td></tr>
+      <tr><td>Khớp method</td><td><code>if (request.method === 'GET')</code></td><td><code>@Get()</code> <code>@Post()</code></td></tr>
+      <tr><td>Đọc query</td><td><code>url.searchParams.get('level')</code></td><td><code>@Query('level')</code></td></tr>
+      <tr><td>Đọc phần động của path</td><td><span class="nullcell">tự cắt chuỗi bằng tay</span></td><td><code>@Param('id')</code></td></tr>
+      <tr><td>Đọc body JSON</td><td>vòng <code>for await</code> + <code>JSON.parse</code> + <code>try/catch</code></td><td><code>@Body()</code></td></tr>
+      <tr><td>Ép kiểu tham số</td><td><span class="nullcell">không có</span></td><td><code>ParseIntPipe</code> → tự <code>400</code></td></tr>
+      <tr><td>Kiểm tra dữ liệu vào</td><td>tự viết <code>if</code> từng trường, từng route</td><td>DTO + <code>ValidationPipe</code></td></tr>
+      <tr><td>Trả JSON</td><td><code>JSON.stringify</code> + <code>writeHead</code></td><td><code>return</code> object là xong</td></tr>
+      <tr><td><code>Content-Type</code></td><td>tự dán mỗi lần</td><td>tự động</td></tr>
+      <tr><td>Báo lỗi</td><td><code>writeHead(404)</code> + tự bịa hình dạng JSON</td><td><code>throw new NotFoundException()</code></td></tr>
+      <tr><td>Lỗi không lường trước</td><td><span class="nullcell">CHẾT CẢ TIẾN TRÌNH</span></td><td>bắt sẵn → <code>500</code>, tiến trình sống</td></tr>
+    </tbody>
+  </table>
+
+  <div class="callout why">
+    <div class="ct">💡 Dòng cuối là thứ đáng giá nhất</div>
+    <p style="margin-bottom:0">
+      Trong <code>lab/</code>, một request rác 4 ký tự giết được cả server (Bài 02, Bài 04). Trong Nest,
+      bạn chỉ <code>throw</code> và tiến trình vẫn sống — vì Nest bọc sẵn lớp bắt lỗi quanh mọi handler.
+      <em>Nest không làm bạn giỏi hơn; nó làm cái sai của bạn ít chết người hơn.</em>
+    </p>
+  </div>
+
+  <h2>5. Event loop — chờ vs bận</h2>
+
+  <table class="data">
+    <thead><tr><th></th><th>CHỜ (I/O)</th><th>BẬN (CPU)</th></tr></thead>
+    <tbody>
+      <tr><td>Ví dụ</td><td>query DB, gọi API, đọc file, đợi upload</td><td>băm mật khẩu, resize ảnh, vòng lặp lớn</td></tr>
+      <tr><td>Node có rảnh</td><td>✅ phục vụ người khác được</td><td>❌ cả server đứng hình</td></tr>
+      <tr><td>5 request cùng lúc, mỗi cái 3s</td><td><strong>3 giây</strong> (song song)</td><td><span class="nullcell">15 giây</span> (xếp hàng)</td></tr>
+    </tbody>
+  </table>
+
+  <div class="code-block">
+    <span class="code-label">luật của event loop</span>
+<pre><code>lap mai mai:
+  1. Chay HET code dang co  <span class="cmt">&lt;- KHONG the cat ngang code cua ban</span>
+  2. Xem viec nao ben ngoai bao "xong roi"
+  3. Chay ham tuong ung
+  4. Quay lai 1
+
+=&gt; setTimeout(fn, 0) KHONG phai "chay sau 0ms"
+   ma la "chay som nhat co the SAU KHI luong ranh"
+   (do luong ban 2s -&gt; timer chay sau 2000ms)</code></pre>
+  </div>
+
+  <table class="data">
+    <thead><tr><th>Hàng đợi</th><th>Gồm</th><th>Ưu tiên</th></tr></thead>
+    <tbody>
+      <tr><td><strong>Microtask</strong></td><td><code>.then()</code>, <code>await</code>, <code>queueMicrotask</code></td><td>Chạy <strong>trước</strong>, và <span class="nullcell">vét sạch</span> mới thôi</td></tr>
+      <tr><td><strong>Macrotask</strong></td><td><code>setTimeout</code>, I/O, <code>setImmediate</code></td><td>Vòng lặp kế tiếp</td></tr>
+    </tbody>
+  </table>
+
+  <div class="callout warn">
+    <div class="ct">⚠️ Ba câu chốt về hiệu năng Node</div>
+    <ul style="margin-bottom:0">
+      <li><code>await</code> <strong>KHÔNG</strong> biến việc CPU thành việc không chặn — nó không đẩy việc đi đâu cả.</li>
+      <li>Nhóm luồng libuv mặc định <strong>4</strong> (<code>fs</code>, <code>crypto.pbkdf2</code>, <code>dns.lookup</code>). Tăng lên không cứu được việc CPU-nặng — thêm luồng không đẻ ra thêm CPU.</li>
+      <li>Việc CPU-nặng phải <strong>ra khỏi vòng đời request</strong> → hàng đợi nền.</li>
+    </ul>
+  </div>
+
+  <h2>6. Async &amp; lỗi đi đâu</h2>
+
+  <table class="data">
+    <thead><tr><th>Thế hệ</th><th>Lỗi đi đường nào</th><th>Hỏng khi</th></tr></thead>
+    <tbody>
+      <tr><td>Callback</td><td>tham số đầu <code>(err, data)</code></td><td>quên kiểm <code>err</code> → nuốt im lặng</td></tr>
+      <tr><td>Promise</td><td>chảy tới <code>.catch()</code> gần nhất</td><td>không có <code>.catch()</code> → giết tiến trình</td></tr>
+      <tr><td>async/await</td><td><code>await</code> ném lại → <code>try/catch</code> bắt được</td><td><span class="nullcell">quên <code>await</code></span> → xem dưới</td></tr>
+    </tbody>
+  </table>
+
+  <div class="code-block">
+    <span class="code-label">ba cái bẫy, thuộc lòng</span>
+<pre><code><span class="cmt">// BAY 1: try/catch KHONG doi duoc. No chi bat cai no NGAY BAY GIO.</span>
+<span class="kw">try</span> { <span class="fn">setTimeout</span>(() => { <span class="kw">throw new</span> <span class="fn">Error</span>(<span class="str">'x'</span>); }, <span class="num">100</span>); }
+<span class="kw">catch</span> { <span class="cmt">/* KHONG BAO GIO CHAY - stack da rong khi callback chay */</span> }
+
+<span class="cmt">// BAY 2: quen await -> tra 200 ROI MOI CHET (te nhat vi noi doi client)</span>
+<span class="kw">try</span> { <span class="fn">truyVanDatabase</span>(); }        <span class="cmt">// thieu await</span>
+<span class="kw">catch</span> { <span class="cmt">/* khong chay; vai ms sau tien trinh CHET */</span> }
+
+<span class="cmt">// BAY 3: luoi cuoi cung - de LOG, KHONG phai de song sot</span>
+process.<span class="fn">on</span>(<span class="str">'unhandledRejection'</span>, (lyDo) => {
+  logger.<span class="fn">error</span>(lyDo);
+  process.<span class="fn">exit</span>(<span class="num">1</span>);   <span class="cmt">// chay tiep voi trang thai do dang con NGUY HIEM HON</span>
+});</code></pre>
+  </div>
+
+  <h2>7. NestJS — bộ khung tối thiểu</h2>
+
+  <div class="code-block">
+    <span class="code-label">4 file cho một nhóm tính năng</span>
+<pre><code><span class="cmt">// course.interface.ts — hinh dang du lieu (interface: bien mat luc build)</span>
+<span class="kw">export interface</span> Course { id: <span class="kw">number</span>; title: <span class="kw">string</span>; }
+
+<span class="cmt">// courses.service.ts — NGHIEP VU. Khong mot chu nao ve HTTP.</span>
+<span class="kw">@Injectable</span>()
+<span class="kw">export class</span> CoursesService {
+  <span class="fn">findOne</span>(id: <span class="kw">number</span>) {
+    <span class="kw">if</span> (!found) <span class="kw">throw new</span> <span class="fn">NotFoundException</span>(<span class="str">'...'</span>);  <span class="cmt">// -&gt; 404 tu dong</span>
+  }
+}
+
+<span class="cmt">// courses.controller.ts — CUA VAO HTTP</span>
+<span class="kw">@Controller</span>(<span class="str">'courses'</span>)
+<span class="kw">export class</span> CoursesController {
+  <span class="fn">constructor</span>(<span class="kw">private readonly</span> coursesService: CoursesService) {}  <span class="cmt">// DI</span>
+
+  <span class="kw">@Get</span>(<span class="str">':id'</span>)
+  <span class="fn">findOne</span>(<span class="kw">@Param</span>(<span class="str">'id'</span>, ParseIntPipe) id: <span class="kw">number</span>) { ... }
+}
+
+<span class="cmt">// courses.module.ts — GOM NHOM</span>
+<span class="kw">@Module</span>({ controllers: [CoursesController], providers: [CoursesService] })
+<span class="kw">export class</span> CoursesModule {}
+
+<span class="cmt">// app.module.ts — dang ky nhom voi ung dung</span>
+<span class="kw">@Module</span>({ imports: [CoursesModule] })</code></pre>
+  </div>
+
+  <table class="data">
+    <thead><tr><th>Decorator</th><th>Lấy gì</th><th>Tương đương Node thuần</th></tr></thead>
+    <tbody>
+      <tr><td><code>@Controller('courses')</code></td><td>tiền tố đường dẫn</td><td><code>url.pathname.startsWith('/courses')</code></td></tr>
+      <tr><td><code>@Get()</code> <code>@Post()</code></td><td>method + path con</td><td><code>request.method === 'GET'</code></td></tr>
+      <tr><td><code>@Param('id')</code></td><td>phần động của path</td><td>tự cắt chuỗi</td></tr>
+      <tr><td><code>@Query('level')</code></td><td>query string</td><td><code>url.searchParams.get()</code></td></tr>
+      <tr><td><code>@Body()</code></td><td>body đã parse</td><td>vòng <code>for await</code> + <code>JSON.parse</code></td></tr>
+      <tr><td><code>@Injectable()</code></td><td>đánh dấu có thể tiêm</td><td>—</td></tr>
+    </tbody>
+  </table>
+
+  <div class="callout tip">
+    <div class="ct">🔎 DI trong một câu</div>
+    <p style="margin-bottom:0">
+      <strong>Bạn khai báo mình cần gì, không tự đi lấy.</strong> Nest đọc <code>providers</code> để biết
+      nó được phép tạo gì, đọc <code>constructor</code> để biết ai cần gì, rồi lắp vào. Mặc định
+      <strong>một thể hiện dùng chung</strong> — quan trọng khi service giữ kết nối database.
+      Lợi ích thật: đổi ruột (mảng → Postgres) mà controller không sửa một chữ.
+    </p>
+  </div>
+
+  <h2>8. Validation — chặn ở biên</h2>
+
+  <div class="code-block">
+    <span class="code-label">npm install class-validator class-transformer</span>
+<pre><code><span class="cmt">// dto/create-course.dto.ts — phai la CLASS (interface khong mang duoc decorator)</span>
+<span class="kw">export class</span> CreateCourseDto {
+  <span class="kw">@IsString</span>({ message: <span class="str">'title phải là chuỗi'</span> })
+  <span class="kw">@MinLength</span>(<span class="num">3</span>, { message: <span class="str">'title phải từ 3 ký tự'</span> })
+  title: <span class="kw">string</span>;
+
+  <span class="kw">@IsIn</span>([<span class="str">'co-ban'</span>, <span class="str">'nang-cao'</span>]) level: <span class="kw">string</span>;
+  <span class="kw">@IsInt</span>() <span class="kw">@Min</span>(<span class="num">0</span>)              price: <span class="kw">number</span>;
+}
+
+<span class="cmt">// main.ts — bat MOT LAN, ap cho moi route</span>
+app.<span class="fn">useGlobalPipes</span>(<span class="kw">new</span> <span class="fn">ValidationPipe</span>({
+  whitelist: <span class="kw">true</span>,             <span class="cmt">// cat bo truong khong khai bao</span>
+  forbidNonWhitelisted: <span class="kw">true</span>,  <span class="cmt">// co truong la -&gt; 400 luon</span>
+  transform: <span class="kw">true</span>,             <span class="cmt">// JSON tho -&gt; the hien class</span>
+}));</code></pre>
+  </div>
+
+  <table class="data">
+    <thead><tr><th>Decorator hay dùng</th><th>Kiểm gì</th></tr></thead>
+    <tbody>
+      <tr><td><code>@IsString</code> <code>@IsInt</code> <code>@IsBoolean</code> <code>@IsNumber</code></td><td>kiểu cơ bản</td></tr>
+      <tr><td><code>@MinLength(n)</code> <code>@MaxLength(n)</code></td><td>độ dài chuỗi</td></tr>
+      <tr><td><code>@Min(n)</code> <code>@Max(n)</code></td><td>khoảng giá trị số</td></tr>
+      <tr><td><code>@IsIn([...])</code></td><td>chỉ nhận các giá trị liệt kê</td></tr>
+      <tr><td><code>@IsEmail</code> <code>@IsUrl</code> <code>@IsUUID</code></td><td>định dạng</td></tr>
+      <tr><td><code>@IsOptional()</code></td><td>bỏ qua các kiểm tra khác nếu trường vắng mặt</td></tr>
+    </tbody>
+  </table>
+
+  <div class="callout danger">
+    <div class="ct">🚨 <code>whitelist</code> không phải tuỳ chọn cho vui — nó chống mass assignment</div>
+    <p style="margin-bottom:0">
+      Không bật: client gửi kèm <code>{"isAdmin":true}</code> hoặc <code>{"price":0}</code>, dòng
+      <code>{...dto}</code> bê nguyên vào và lưu → <strong>người dùng tự nâng quyền / tự cho mình khoá
+      học miễn phí</strong>. Nguyên tắc: <em>liệt kê thứ ĐƯỢC PHÉP, đừng liệt kê thứ bị cấm.</em>
+    </p>
+  </div>
+
+  <h2>9. Lỗi hay gặp — tra cứu nhanh</h2>
+
+  <table class="data">
+    <thead><tr><th>Thông báo</th><th>Nghĩa</th><th>Sửa</th></tr></thead>
+    <tbody>
+      <tr><td><code>TS1272</code> ... <code>must be imported with 'import type'</code></td><td>Dùng <em>interface</em> làm kiểu trong signature có decorator</td><td>Thêm <code>type</code>: <code>import type { Course }</code></td></tr>
+      <tr><td>Validation im lặng không chạy</td><td>Lỡ dùng <code>import type</code> cho <em>DTO class</em></td><td><span class="nullcell">Bỏ chữ <code>type</code></span> — class phải sống lúc chạy</td></tr>
+      <tr><td><code>Nest can't resolve dependencies of the X (?)</code></td><td>Dấu <code>?</code> = tham số nó không tìm ra</td><td>Thêm vào <code>providers</code>, hoặc <code>exports</code> ở module chứa nó</td></tr>
+      <tr><td>Route không có trong bảng lúc khởi động</td><td>Lỗi <em>khai báo</em>, không phải lỗi logic</td><td>Kiểm <code>imports</code> của <code>AppModule</code> + <code>controllers</code></td></tr>
+      <tr><td><code>EADDRINUSE</code></td><td>Cổng đã bị tiến trình khác chiếm</td><td><code>lsof -nP -iTCP:3333 -sTCP:LISTEN</code></td></tr>
+      <tr><td><code>ERR_HTTP_HEADERS_SENT</code></td><td>Đã <code>writeHead</code> rồi còn ghi tiếp</td><td>Mọi kiểm tra phải làm <em>trước</em> khi ghi header</td></tr>
+      <tr><td>curl <code>exit=28</code></td><td>Timeout — nhánh code quên kết thúc response</td><td>Đảm bảo mọi nhánh đều <code>end()</code></td></tr>
+      <tr><td>curl <code>exit=7</code></td><td>Connection refused — <strong>server đã chết</strong></td><td>Tìm unhandled rejection trong log</td></tr>
+    </tbody>
+  </table>
+
+  <h2>10. Lệnh thử API hay dùng</h2>
+
+  <div class="code-block">
+    <span class="code-label">bash</span>
+<pre><code><span class="cmt"># Xem ca header lan body</span>
+curl -si http://localhost:3333/courses
+
+<span class="cmt"># Chi lay status code</span>
+curl -s -o /dev/null -w <span class="str">'%{http_code}\n'</span> http://localhost:3333/courses/99
+
+<span class="cmt"># POST JSON</span>
+curl -s -X POST http://localhost:3333/courses \
+  -H <span class="str">'Content-Type: application/json'</span> \
+  -d <span class="str">'{"title":"abc","level":"co-ban","price":100}'</span>
+
+<span class="cmt"># Bam gio mot request</span>
+<span class="fn">time</span> curl -s http://localhost:3333/courses
+
+<span class="cmt"># Ban 5 request DONG THOI (do song song hay xep hang)</span>
+<span class="fn">seq</span> <span class="num">5</span> | xargs -P<span class="num">5</span> -I{} curl -s -o /dev/null http://localhost:3333/courses
+
+<span class="cmt"># Xem ai dang chiem cong</span>
+lsof -nP -iTCP:<span class="num">3333</span> -sTCP:LISTEN</code></pre>
+  </div>
+
+  <h2>Nguồn chính chủ</h2>
+  <p class="meta-line">
+    <a href="https://www.rfc-editor.org/rfc/rfc9110.html" target="_blank">RFC 9110 — HTTP Semantics (status code)</a> ·
+    <a href="https://nodejs.org/docs/latest-v22.x/api/http.html" target="_blank">Node <code>http</code></a> ·
+    <a href="https://nodejs.org/docs/latest-v22.x/api/cli.html#uv_threadpool_sizesize" target="_blank">Node <code>UV_THREADPOOL_SIZE</code></a> ·
+    <a href="https://docs.nestjs.com/" target="_blank">NestJS docs</a> ·
+    <a href="https://docs.nestjs.com/techniques/validation" target="_blank">NestJS Validation</a>
+  </p>
+
+  <div class="navbar">
+    <a href="../lessons/0004-async-va-loi.html">← Bài 04</a>
+    <a href="../lessons/index.html">🏠 Mục lục</a>
+    <a href="../lessons/0005-nestjs-endpoint-dau-tien.html">Bài 05 →</a>
+  </div>
+
+</div>
+<script src="../lessons/lesson-enhance.js"></script>
+</body>
+</html>

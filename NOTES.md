@@ -6,9 +6,14 @@
 - **Đã vững:** TypeScript, React, Next.js, Tailwind. Có CLAUDE.md global rất chi tiết về convention
   (feature-based folder, kebab-case file, `interface` > `type`, `cn()` cho className…) → người học
   **có gu kỹ thuật, quan tâm chất lượng code**, không phải người mới hoàn toàn với lập trình.
-- **Backend:** tự đánh giá "chưa biết gì" → bắt đầu từ HTTP / Node runtime / event loop.
-  ⚠️ **Cần kiểm chứng lại bằng quiz ở Bài 01** — người biết Next.js API routes thường đã biết nhiều
-  hơn họ nghĩ. Nếu quiz cho thấy đã nắm, **gộp bài** (lộ trình co giãn).
+- **Backend (đã xác minh lại 2026-08-07 — đây là con số ĐÚNG, dùng cái này):**
+  **"Có nghịch Express, chưa làm gì lớn"** — biết cú pháp cơ bản, từng làm theo tutorial / vài API route
+  Next.js, nhưng **chưa tự thiết kế và vận hành thứ gì hoàn chỉnh**.
+  - ⚠️ Con số cũ ("tự đánh giá chưa biết gì" + quiz Bài 01 chọn A) **là sai** — Tuấn cố ý chọn thấp để
+    lấy nhịp cho khán giả. Đừng dùng lại.
+  - **Hệ quả hiệu chỉnh:** đừng tiêu thời gian dạy **cú pháp** Node/Express (Tuấn có rồi, sẽ chán).
+    Tiêu thời gian vào **bản chất · vì sao · đánh đổi · vận hành khi hỏng** — đúng chỗ Tuấn trống và
+    cũng đúng mission (senior, tự ship & tự vận hành). Bài 02–03 đang đi đúng hướng này.
 
 ## Preferences đã ghi nhận
 
@@ -18,7 +23,8 @@
 - 5–7h/tuần → bài ~40 phút, tự chứa.
 - Mục tiêu: freelance/remote lương cao + tự làm startup → **thiên về "tự làm trọn vẹn & vận hành"**
   hơn là "luyện thi phỏng vấn". Vẫn giữ "Góc phỏng vấn" cho các khái niệm hay bị khách/nhà tuyển
-  dụng hỏi, nhưng **ưu tiên deploy thật, chi phí thật, vận hành thật** hơn là bài mock LeetCode.
+  dụng hỏi — nhưng **gom vào CHƯƠNG CUỐI sau khi dự án xong** (Tuấn chốt 2026-08-07), không rải vào
+  từng bài. Ưu tiên deploy thật, chi phí thật, vận hành thật hơn là bài mock LeetCode.
 
 ## Môi trường máy (đã dò 2026-08-03)
 
@@ -82,42 +88,123 @@ Cách đếm: số file trong `reference/` so với số bài trong `lessons/`.
 
 | Mốc | Trạng thái |
 |---|---|
-| Bài đã soạn | 2 (Bài 00, Bài 01) |
-| Cheat-sheet đã có | 1 — `reference/docker-lenh-thiet-yeu.html` (soạn 2026-08-05, khi Module 0 xong) |
-| **Trigger kế tiếp** | **Bài 05** (đủ 5 bài kể từ cheat-sheet gần nhất) — hoặc sớm hơn nếu Module 1 xong trước |
+| Bài đã soạn | 7 (Bài 00 → Bài 06) |
+| Cheat-sheet đã có | 2 — `docker-lenh-thiet-yeu.html` (Module 0) · **`node-va-nestjs-tra-nhanh.html`** (gom Bài 01→06, soạn 2026-08-25) |
+| Số bài KỂ TỪ cheat-sheet gần nhất | **0** — vừa reset |
+| **Trigger kế tiếp** | Bài 11 (đủ 5 bài kể từ cheat-sheet gần nhất), hoặc khi Module 2 xong — cái nào tới trước |
 
 ## Việc cần làm / theo dõi
 
 - [x] `git init` — đã làm, branch `main`. Chưa có remote → chỉ commit, chưa push.
 - [x] Chấm bài tập Bài 01 — đạt sau 1 lần revise. Xem `learning-records/0003`.
+- [ ] **Bài 02 đã soạn (2026-08-07), CHƯA commit** — theo rule, commit + push sau khi Tuấn xác nhận
+      hoàn thành bài. Phần thuộc commit này: `lessons/0002-request-response.html`, `lessons/index.html`,
+      `lessons/0001-*.html` (mở navbar), `NOTES.md`, `elearning-api/lab/02-*.mjs` (code Tuấn viết),
+      + `learning-records/0004` và `GLOSSARY.md` (viết lúc chấm bài).
+- [ ] **Bài 03 SOẠN TRƯỚC khi Tuấn học xong Bài 02** (2026-08-07, Tuấn yêu cầu: soạn sẵn để hôm sau quay
+      cho trơn, khỏi phải cắt đoạn chờ trong lúc edit video). Hệ quả phải nhớ:
+      - Bài 03 viết khi **chưa chấm Bài 02** → nếu lúc chấm lộ ra lỗ hổng, phải **quay lại chỉnh Bài 03**
+        cho khớp trước khi Tuấn quay.
+      - Bài 03 **chưa commit**. Thứ tự commit vẫn phải là: Bài 02 xong → commit+push Bài 02 → rồi mới
+        commit Bài 03. Không gộp hai bài vào một commit.
+      - `index.html`: Bài 03 để badge `soon` nhưng đã là link thật (đã soạn, chưa học tới).
+- [x] ~~Can thiệp rule A21 bằng "Bước 0 nộp ca test"~~ → **ĐÃ GỠ 2026-08-07** (Tuấn bỏ bài tập để đi
+      nhanh). Điểm yếu "chỉ test happy path" (record 0003) vẫn còn đó, chưa được xử lý — **theo dõi
+      bằng cách khác**: khi review code Tuấn viết trong `src/`, chủ động chỉ ra ca chưa xử lý thay vì
+      giao bài tập.
 
-## 🎥 QUAN TRỌNG — khoá này là series YouTube (rõ 2026-08-05)
+## 🎯 LỘ TRÌNH PHỤC VỤ TUẤN HỌC GIỎI LÊN — KHÔNG phục vụ việc quay video (Tuấn chốt 2026-08-07)
 
-Tuấn **quay khoá này thành series "Từ Frontend Đến Fullstack Cùng AI trong 60 ngày"** (1 bài = 1 tập;
-Bài 00 = Ngày 01, Bài 01 = Ngày 02). Khán giả là **người mới**.
+**Đây là rule cao nhất về thiết kế bài. Nếu nó mâu thuẫn với bất cứ ghi chú nào khác, nó thắng.**
 
-→ Ở quiz dò nền Bài 01, Tuấn **cố ý chọn A** ("chưa từng viết server Node") dù **thực tế đã từng viết
-rồi** — chọn nhịp cho khán giả, không phải tự đánh giá sai.
+Tuấn nói thẳng: *"lộ trình là thiết kế cho tôi học và giỏi lên, có win theo rule, chứ không phải để
+quay video"*. Việc quay là **hệ quả**, không phải đầu vào của thiết kế.
 
-⚠️ **Tuấn GHI HÌNH NGAY TRONG LÚC HỌC** (kiểu "vừa live vừa học"), không phải học xong rồi quay lại.
-**Câu trả lời của tôi trong chat chính là nội dung lên hình** — không có bản nháp, không có take 2:
-- Trả lời **gọn, có cấu trúc, đọc lên thành lời được**; tránh tường chữ và bảng quá rộng.
-- **Không đề nghị "gợi ý bố cục quay"** — không có diễn tập thì bố cục vô nghĩa.
-- Chấm bài sai thì **nói thẳng ngay**; vấp rồi sửa trên sóng là nội dung tốt, đừng làm nhẹ đi.
-- **Soạn xong bài HTML TRƯỚC** khi Tuấn vào phần thực hành, để Tuấn vừa mở vừa làm theo trên sóng.
+**Đo độ khó theo `learning-records/` + teach-preferences (A3 ZPD, A12/A20 thử thách), TUYỆT ĐỐI không
+theo "khán giả người mới".** Câu hỏi đúng luôn là *"cái này có làm Tuấn giỏi lên không?"* — không bao
+giờ là *"khán giả có theo kịp không?"*.
 
-**Cách dạy từ Bài 02 trở đi — tách đôi mỗi bài:**
+### ❌ Ba thứ đã lái sai lộ trình trước 2026-08-07 (đã gỡ, đừng để mọc lại)
 
-| Phần | Nhịp | Vì sao |
-|---|---|---|
-| **Nội dung bài (lên hình)** | Trình độ **người mới**: từng bước đánh số, không nhảy cóc, giải thích cả thứ "ai cũng biết", mọi lệnh copy-paste được | Khán giả phải làm theo được |
-| **Phần riêng cho Tuấn** | Nâng độ khó ở **tự kiểm chứng / tự nghĩ ca test** — KHÔNG nâng ở cú pháp | Đó mới là chỗ Tuấn thật sự vấp (record 0003), cú pháp thì Tuấn không vấp |
+1. ~~"Nội dung bài để ở trình độ NGƯỜI MỚI vì khán giả phải làm theo được"~~ → **SAI**. Hạ trần độ khó
+   của chính người học để phục vụ người xem. Giờ: độ khó bám ZPD của Tuấn.
+2. ~~"KHÔNG bật chế độ thử thách vì nó phá format quay"~~ → **SAI, và tai hại nhất.** Đây là lấy lý do
+   quay dựng để tắt hẳn rule A12/A20. Giờ: **bật chế độ thử thách bình thường** khi record cho thấy
+   Tuấn đã vững phần đó. Format quay tự lo được.
+3. ~~Mục "Góc lên hình / câu hỏi khán giả sẽ hỏi trong comment"~~ → **SAI**. Đã bỏ khỏi Bài 02
+   (Tuấn nhắc 2 lần). Không thêm bất kỳ mục hỗ trợ quay dựng nào vào bài, dưới bất kỳ tên gì.
 
-**Hệ quả:** KHÔNG bật chế độ thử thách kiểu "tự build từ đầu" — nó phá format quay. Thay vào đó ép
-Tuấn **giải thích được VÌ SAO ở mức đủ để lên hình dạy lại người khác**; đó là thử thách đúng tầm và
-đúng thứ series cần.
+### ✅ Phần còn đúng — nhưng chỉ là HẬU CẦN, không được lái nội dung
 
-**Thêm vào mỗi bài từ Bài 02:** một mục lường trước **câu hỏi khán giả sẽ hỏi trong comment** — vừa
-giúp Tuấn chủ động khi quay, vừa là cách ép Tuấn kiểm tra mình hiểu tới đâu.
+- Tuấn **ghi hình ngay trong lúc học**, không có take 2 → **soạn xong bài HTML TRƯỚC khi Tuấn ngồi vào
+  học** (Tuấn xác nhận lại 2026-08-07: soạn trước để hôm sau quay khỏi phải cắt đoạn chờ khi edit).
+  Đây là lý do *thời điểm giao bài*, không phải lý do *hạ độ khó*.
+- Trả lời trong chat nên **gọn, có cấu trúc**. Đây vốn cũng là cách trả lời tốt — giữ vì nó tốt, không
+  phải vì nó lên hình.
+- Chấm sai thì **nói thẳng ngay** (vốn đã là rule A10, không liên quan gì tới quay).
+
+### ⚠️ Hệ quả cần xử lý: nền của Tuấn ĐANG BỊ GHI SAI
+
+Ở quiz dò nền Bài 01, Tuấn **cố ý chọn A** ("chưa từng viết server Node") dù **thực tế đã từng viết
+rồi** — chọn nhịp cho khán giả. Tức là input để tôi hiệu chỉnh lộ trình là input giả.
+✅ **Đã hỏi lại và sửa 2026-08-07** — nền thật ghi ở mục "Bối cảnh người học" đầu file.
+→ Module 1 **giữ nguyên số bài** (nền tutorial-level thì Bài 01–06 vẫn đáng học), nhưng **trọng tâm dịch
+sang bản chất/vận hành thay vì cú pháp**.
+
+### Chế độ thử thách (A12/A20) → **TUỲ CHỌN, không bắt buộc** (Tuấn chốt 2026-08-07)
+
+Tuấn vừa học vừa quay YouTube thật, nên chốt: **chế độ thử thách là optional.** Không tự ý bật, không
+coi việc thiếu nó là nợ kỹ thuật, không hỏi lại mỗi bài.
+- **Mặc định:** giữ format hiện tại — bài giảng đầy đủ + siết ở phần **tự kiểm chứng** (nộp ca test
+  trước khi code, tự thiết kế phép đo, tự giải thích vì sao). Phần siết này KHÔNG phải chế độ thử thách,
+  cứ giữ vì nó đúng chỗ Tuấn yếu.
+- **Chỉ bật chế độ thử thách đầy đủ khi TUẤN CHỦ ĐỘNG YÊU CẦU.** Lúc đó mới dùng cấu trúc A20 đầy đủ
+  (đề + TC1..TCn + DoD + hint ladder + review 5 trục + lời giải sau cùng).
+- ⚠️ Khác với lần trước: lần trước thử thách bị tắt vì *"phá format quay"* (lý do sai, đã gỡ). Lần này
+  tắt vì **Tuấn chủ động chọn**, sau khi đã biết rõ nó là gì. Đây là quyết định của người học — tôn trọng.
+
+### ⚡ TỐC ĐỘ > ĐẦY ĐỦ — bỏ bài tập, ưu tiên ra sản phẩm (Tuấn chốt 2026-08-07)
+
+Tuấn: *"cần win nhanh để làm ra sản phẩm sớm vì thời gian không còn nhiều"*.
+
+**KHÔNG soạn bài tập / "Bước 0 bắt buộc" / "đề bài" / "nộp kết quả" nữa.** Đã gỡ khỏi Bài 02, 03, 04.
+- Win của mỗi bài = **gõ lại code trong bài và thấy nó chạy**, không phải làm thêm bài tập.
+- **Quiz 5 câu cuối bài GIỮ NGUYÊN** — đó là phần tự kiểm, có phản hồi ngay, tốn 2 phút.
+- Tuấn tự báo khi thấy lủng chỗ nào; không bắt nộp để chấm.
+- Vẫn giữ: verify code chạy thật trước khi giao, nguồn chính chủ, comment tiếng Việt, điều hướng.
+
+### 🎓 Ôn phỏng vấn = CHƯƠNG CUỐI, sau khi dự án e-learning xong (Tuấn chốt 2026-08-07)
+
+**KHÔNG chèn "Góc phỏng vấn" vào từng bài** (đã định làm rồi Tuấn chặn lại — đừng làm nữa).
+Gom thành **một chương riêng ở CUỐI lộ trình**, chạy *sau khi* dự án e-learning hoàn thành:
+ôn tập + bài test đánh giá đã vững chưa + các câu nhà tuyển dụng/khách hay hỏi.
+Lý do Tuấn muốn vậy: làm xong sản phẩm trước đã, ôn phỏng vấn là việc sau.
+
+### 🔀 ĐỔI HƯỚNG LỘ TRÌNH — vào NestJS + dự án thật ngay (Tuấn chốt 2026-08-07)
+
+Tuấn: *"vào làm dự án song song với kiến thức luôn, học kiến thức NestJS và giải thích rồi áp dụng
+vào dự án e-learning"*.
+- **Module 1 dừng ở Bài 04.** Graceful shutdown + thiết kế REST **hoãn lại** — kéo vào khi API cần
+  deploy / đủ lớn. Đã đánh dấu `hoãn` trong `index.html`.
+- **Bài 05 mới = NestJS: Module–Controller–Service + endpoint đầu tiên.** Nó **GỘP** 4 bài cũ
+  (07 từ node:http tới Nest · 08 DI · 09 Controller · 10 Service) — vì Tuấn có nền Express, dạy tách
+  4 bài là thừa. Module 2 đã đánh số lại 05→09; **các module sau sẽ dồn lên ~5 số**, chưa sửa trong
+  `index.html` (sửa dần khi tới, đừng sửa một lượt cho tốn công).
+- Đã verify Bài 05 chạy thật trong `src/` rồi **XOÁ đi** để Tuấn tự gõ lấy win — `git status` sạch.
+  🐛 Bắt được lỗi thật khi verify: `TS1272` — interface dùng làm kiểu trả về trong signature có
+  decorator **phải** `import type`. Đã viết thành callout trong bài.
+- Từ đây **mỗi bài phải đắp một mẩu CHẠY ĐƯỢC vào `elearning-api/src/`**, hết thời kỳ `lab/`.
+- Nhịp mỗi bài: *khái niệm NestJS → giải thích vì sao → áp thẳng vào e-learning*.
+
+### 🚦 Khi Tuấn bảo "soạn bài mới" → SOẠN LUÔN (Tuấn chốt 2026-08-07)
+
+**Không hỏi lại "tại sao", không chất vấn thứ tự, không đòi điều kiện tiên quyết** (kiểu "bài trước chưa
+chấm xong thì chưa soạn bài mới"). Tuấn tự biết mình đang cần gì.
+- Vẫn giữ nguyên các rule về CHẤT LƯỢNG bài: verify code chạy thật trước khi giao (A19), trích nguồn
+  chính chủ (A6), mỗi bài một win (A2), cập nhật `index.html` + điều hướng (B.2).
+- Nếu có rủi ro thật (vd bài mới phụ thuộc kiến thức bài chưa học) thì **nói một câu rồi vẫn soạn**,
+  không dừng lại chờ trả lời.
+- [ ] Khi tới Module 5 (thanh toán): hỏi Tuấn muốn Stripe (khách quốc tế/remote) hay VNPay/MoMo
+      (khách VN) — ảnh hưởng lớn tới bài webhook.
 - [ ] Khi tới Module 5 (thanh toán): hỏi Tuấn muốn Stripe (khách quốc tế/remote) hay VNPay/MoMo
       (khách VN) — ảnh hưởng lớn tới bài webhook.

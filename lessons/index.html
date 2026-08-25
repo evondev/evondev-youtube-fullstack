@@ -60,8 +60,8 @@
   </div>
 
   <div class="progress-wrap">
-    <div class="progress-bar"><div class="progress-fill" style="width: 3.5%"></div></div>
-    <div class="progress-label">2 / 57 bài · Module 0 xong ✅ · Đang ở Module 1 — bản chất backend</div>
+    <div class="progress-bar"><div class="progress-fill" style="width: 12.3%"></div></div>
+    <div class="progress-label">7 bài đã soạn · Module 1 xong ✅ · Đang ở Module 2 — NestJS &amp; dự án e-learning thật</div>
   </div>
 
   <!-- ===== MODULE 0 ===== -->
@@ -81,12 +81,13 @@
     <h2>Bản chất backend &amp; Node runtime</h2>
     <p class="module-why">Framework chỉ là lớp bọc. Nếu không hiểu HTTP và event loop, bạn sẽ mãi copy-paste NestJS mà không biết vì sao hệ thống chậm hay chết. Module này bạn viết server <em>không dùng framework</em>, trong <code>lab/</code>.</p>
     <ul class="lessons-list">
-      <li><a href="0001-http-that-su-la-gi.html"><span class="badge now">Bài 01</span> HTTP thực sự là gì — tự viết web server bằng <code>node:http</code> thuần <span class="lcount">nền · lab/</span></a></li>
-      <li><span class="soon"><span class="badge soon">Bài 02</span> Request &amp; Response: method, status code, header, body <span class="lcount">nền · lab/</span></span></li>
-      <li><span class="soon"><span class="badge soon">Bài 03</span> Event loop &amp; non-blocking I/O — vì sao Node hợp việc I/O <span class="lcount">nền · lab/</span></span></li>
-      <li><span class="soon"><span class="badge soon">Bài 04</span> Async trong Node: callback → Promise → async/await, và lỗi đi đâu <span class="lcount">nền · lab/</span></span></li>
-      <li><span class="soon"><span class="badge soon">Bài 05</span> Tiến trình server: env, tín hiệu tắt, graceful shutdown <span class="lcount">→ API tắt an toàn</span></span></li>
-      <li><span class="soon"><span class="badge soon">Bài 06</span> Thiết kế REST API: resource, verb, status, versioning, idempotency <span class="lcount">→ bản thiết kế API</span></span></li>
+      <li><a href="0001-http-that-su-la-gi.html"><span class="badge done">Bài 01</span> HTTP thực sự là gì — tự viết web server bằng <code>node:http</code> thuần <span class="lcount">nền · lab/</span></a></li>
+      <li><a href="0002-request-response.html"><span class="badge now">Bài 02</span> Request &amp; Response: method, status code, header, body <span class="lcount">nền · lab/</span></a></li>
+      <li><a href="0003-event-loop.html"><span class="badge now">Bài 03</span> Event loop &amp; non-blocking I/O — vì sao Node hợp việc I/O <span class="lcount">nền · lab/</span></a></li>
+      <li><a href="0004-async-va-loi.html"><span class="badge now">Bài 04</span> Async trong Node: callback → Promise → async/await, và lỗi đi đâu <span class="lcount">nền · lab/</span></a></li>
+      <li><span class="soon"><span class="badge soon">hoãn</span> Tiến trình server: env, tín hiệu tắt, graceful shutdown <span class="lcount">kéo vào khi API cần deploy</span></span></li>
+      <li><span class="soon"><span class="badge soon">hoãn</span> Thiết kế REST API: resource, verb, status, versioning, idempotency <span class="lcount">kéo vào khi API đủ lớn</span></span></li>
+      <li><a href="../reference/node-va-nestjs-tra-nhanh.html"><span class="badge done">📄 Ôn</span> Cheat-sheet: Node core &amp; NestJS cải thiện gì <span class="lcount">gom Bài 01→06 · in được</span></a></li>
     </ul>
   </div>
 
@@ -94,16 +95,13 @@
   <div class="module">
     <div class="module-head"><span class="module-num">Module 2</span></div>
     <h2>NestJS — kiến trúc và <em>vì sao</em> có nó</h2>
-    <p class="module-why">Sau khi tự tay chịu khổ ở Module 1, bạn sẽ thấy rõ Nest giải quyết vấn đề gì. Module này dựng bộ khung mà 40 bài sau đắp code vào — và ra endpoint thật đầu tiên.</p>
+    <p class="module-why">Sau khi tự tay chịu khổ ở Module 1, bạn sẽ thấy rõ Nest giải quyết vấn đề gì. Module này dựng bộ khung mà các bài sau đắp code vào — và ra endpoint thật đầu tiên.<br><em style="opacity:.75">Lộ trình đã rút gọn để ra sản phẩm sớm: Bài 05 gộp luôn phần Module/DI/Controller/Service. Số bài các module sau sẽ dồn lên tương ứng.</em></p>
     <ul class="lessons-list">
-      <li><span class="soon"><span class="badge soon">Bài 07</span> Từ <code>node:http</code> tới NestJS — Nest thực sự giải quyết vấn đề gì <span class="lcount">nền · so sánh lab/ vs src/</span></span></li>
-      <li><span class="soon"><span class="badge soon">Bài 08</span> Module &amp; Dependency Injection — bản chất IoC container <span class="lcount">→ CoursesModule</span></span></li>
-      <li><span class="soon"><span class="badge soon">Bài 09</span> Controller &amp; routing: nhận request đúng cách <span class="lcount">→ GET /courses</span></span></li>
-      <li><span class="soon"><span class="badge soon">Bài 10</span> Service &amp; provider: tách nghiệp vụ khỏi HTTP, scope &amp; lifecycle <span class="lcount">→ CoursesService</span></span></li>
-      <li><span class="soon"><span class="badge soon">Bài 11</span> DTO + ValidationPipe: chặn dữ liệu bẩn ngay ở biên hệ thống <span class="lcount">→ POST /courses có validate</span></span></li>
-      <li><span class="soon"><span class="badge soon">Bài 12</span> Exception filter: vì sao lỗi API phải có "hình dạng" cố định <span class="lcount">→ lỗi API chuẩn hoá</span></span></li>
-      <li><span class="soon"><span class="badge soon">Bài 13</span> Config &amp; 12-factor: env, validate cấu hình ngay lúc khởi động <span class="lcount">→ .env + kiểm config</span></span></li>
-      <li><span class="soon"><span class="badge soon">Bài 14</span> Logging có cấu trúc + request-id: nhìn thấy hệ thống đang làm gì <span class="lcount">→ log có request-id</span></span></li>
+      <li><a href="0005-nestjs-endpoint-dau-tien.html"><span class="badge now">Bài 05</span> NestJS: Module – Controller – Service, và endpoint thật đầu tiên <span class="lcount">→ GET /courses trong src/</span></a></li>
+      <li><a href="0006-dto-validation.html"><span class="badge now">Bài 06</span> DTO + ValidationPipe: chặn dữ liệu bẩn ngay ở biên hệ thống <span class="lcount">→ POST /courses có validate</span></a></li>
+      <li><span class="soon"><span class="badge soon">Bài 07</span> Exception filter: vì sao lỗi API phải có "hình dạng" cố định <span class="lcount">→ lỗi API chuẩn hoá</span></span></li>
+      <li><span class="soon"><span class="badge soon">Bài 08</span> Config &amp; 12-factor: env, validate cấu hình ngay lúc khởi động <span class="lcount">→ .env + kiểm config</span></span></li>
+      <li><span class="soon"><span class="badge soon">Bài 09</span> Logging có cấu trúc + request-id: nhìn thấy hệ thống đang làm gì <span class="lcount">→ log có request-id</span></span></li>
     </ul>
   </div>
 
