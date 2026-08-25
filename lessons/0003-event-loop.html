@@ -1,0 +1,453 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Bài 03 · Event loop &amp; non-blocking I/O — vì sao Node hợp việc I/O</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="lesson.css">
+</head>
+<body>
+<div class="wrap">
+
+  <span class="lesson-tag">Module 1 · Bài 03</span>
+  <h1>Event loop &amp; non-blocking I/O — vì sao Node hợp việc I/O</h1>
+  <p class="subtitle">Cùng một tiến trình, cùng một luồng: một endpoint phục vụ 5 người trong 3 giây, endpoint kia bắt họ xếp hàng 15 giây. Bạn sẽ đo cả hai.</p>
+  <p class="meta-line">⏱ ~40 phút · 🎯 Mục tiêu: nói được chính xác <em>loại việc nào</em> làm Node đứng hình — và chứng minh bằng số đo của chính bạn, không phải bằng câu chữ học thuộc.</p>
+
+  <div class="callout bridge">
+    <div class="ct">🌉 Bắc cầu từ Bài 02</div>
+    <p>
+      Cuối Bài 02 tôi hỏi: khi handler đang đứng ở <code>for await</code> đợi body 5MB về,
+      <strong>server có phục vụ được người khác không?</strong> Và tôi nói cả hai câu trả lời đều nghe
+      hợp lý:
+    </p>
+    <ul>
+      <li><em>"Không"</em> — JavaScript một luồng, đang mắc kẹt thì lấy gì chạy việc khác.</li>
+      <li><em>"Có"</em> — nếu mỗi upload lớn làm đứng cả server thì đã không ai dùng Node làm backend.</li>
+    </ul>
+    <p style="margin-bottom:0">
+      Đáp án: <strong>cả hai đều đúng, nhưng cho hai loại "chậm" khác nhau</strong> — và gần như mọi
+      người mới đều gộp hai thứ đó làm một. Tách được chúng ra là toàn bộ nội dung bài này. Câu chốt:
+      <strong>Node không sợ việc lâu, Node sợ việc bận.</strong>
+    </p>
+  </div>
+
+  <h2>1. Hai loại "chậm" mà ai cũng gộp làm một</h2>
+
+  <p>
+    Một request mất 3 giây. Nghe thì như nhau, nhưng có hai lý do hoàn toàn khác nhau:
+  </p>
+
+  <table class="data">
+    <thead><tr><th></th><th>Chờ (I/O)</th><th>Bận (CPU)</th></tr></thead>
+    <tbody>
+      <tr><td><strong>Đang làm gì</strong></td><td>Đã nhờ người khác làm, ngồi không đợi kết quả</td><td>Tự tay làm, không rảnh một giây nào</td></tr>
+      <tr><td><strong>Ví dụ thật</strong></td><td>Query database, gọi API bên thứ 3, đọc file, đợi body upload</td><td>Băm mật khẩu, resize ảnh, xử lý video, sắp xếp mảng 10 triệu phần tử</td></tr>
+      <tr><td><strong>Ai thật sự làm việc</strong></td><td>Postgres / máy khác / đĩa cứng / card mạng</td><td><span class="nullcell">Chính luồng JavaScript của bạn</span></td></tr>
+      <tr><td><strong>Node có rảnh không</strong></td><td>✅ Rảnh — phục vụ người khác được</td><td>❌ Không — cả server đứng hình</td></tr>
+    </tbody>
+  </table>
+
+  <p>
+    Cả bài này chỉ để bạn <em>đo thấy</em> dòng cuối cùng của bảng đó. Đừng tin nó vì tôi viết ra —
+    lát nữa bạn sẽ có con số của chính mình.
+  </p>
+
+  <h2>2. Dựng bàn đo</h2>
+
+  <p>
+    Tạo file <code>lab/03-event-loop.mjs</code>. Server này có 3 route cố ý rất đơn giản:
+    một cái trả lời ngay (để làm <em>thước đo</em>), một cái <em>chờ</em> 3 giây, một cái <em>tính</em> 3 giây.
+  </p>
+
+  <div class="code-block">
+    <span class="code-label">elearning-api/lab/03-event-loop.mjs</span>
+<pre><code><span class="kw">import</span> { createServer } <span class="kw">from</span> <span class="str">'node:http'</span>;
+<span class="cmt">// Phiên bản setTimeout trả về Promise, để dùng được với await.</span>
+<span class="kw">import</span> { setTimeout <span class="kw">as</span> doi } <span class="kw">from</span> <span class="str">'node:timers/promises'</span>;
+
+<span class="cmt">// Ghi log kèm mốc thời gian tính từ lúc server khởi động,</span>
+<span class="cmt">// để ta ĐO được ai chạy trước ai chứ không phải đoán.</span>
+<span class="kw">const</span> luc0 = <span class="fn">Date.now</span>();
+<span class="kw">const</span> nhatKy = (chu) => console.<span class="fn">log</span>(<span class="str">`[</span>${<span class="fn">String</span>(<span class="fn">Date.now</span>() - luc0).<span class="fn">padStart</span>(<span class="num">5</span>)}<span class="str">ms] </span>${chu}<span class="str">`</span>);
+
+<span class="kw">const</span> server = <span class="fn">createServer</span>(<span class="kw">async</span> (request, response) => {
+  <span class="kw">const</span> url = <span class="kw">new</span> <span class="fn">URL</span>(request.url, <span class="str">`http://</span>${request.headers.host}<span class="str">`</span>);
+
+  <span class="cmt">// ── /nhanh: trả lời ngay, không chờ gì cả ──────────────</span>
+  <span class="cmt">// Đây là THƯỚC ĐO. Nếu nó chậm thì chắc chắn do thứ khác giam luồng.</span>
+  <span class="kw">if</span> (url.pathname === <span class="str">'/nhanh'</span>) {
+    <span class="fn">nhatKy</span>(<span class="str">'/nhanh   -&gt; tra loi ngay'</span>);
+    response.<span class="fn">writeHead</span>(<span class="num">200</span>, { <span class="str">'Content-Type'</span>: <span class="str">'text/plain; charset=utf-8'</span> });
+    <span class="kw">return</span> response.<span class="fn">end</span>(<span class="str">'nhanh\n'</span>);
+  }
+
+  <span class="cmt">// ── /io: CHỜ thứ bên ngoài (giả lập query DB 3 giây) ───</span>
+  <span class="kw">if</span> (url.pathname === <span class="str">'/io'</span>) {
+    <span class="fn">nhatKy</span>(<span class="str">'/io      -&gt; bat dau CHO 3s'</span>);
+    <span class="kw">await</span> <span class="fn">doi</span>(<span class="num">3000</span>);            <span class="cmt">// await = "tôi nhả luồng ra, gọi tôi lại khi xong"</span>
+    <span class="fn">nhatKy</span>(<span class="str">'/io      -&gt; cho xong, tra loi'</span>);
+    response.<span class="fn">writeHead</span>(<span class="num">200</span>, { <span class="str">'Content-Type'</span>: <span class="str">'text/plain; charset=utf-8'</span> });
+    <span class="kw">return</span> response.<span class="fn">end</span>(<span class="str">'io xong\n'</span>);
+  }
+
+  <span class="cmt">// ── /cpu: TÍNH TOÁN 3 giây, không nhả luồng ────────────</span>
+  <span class="kw">if</span> (url.pathname === <span class="str">'/cpu'</span>) {
+    <span class="fn">nhatKy</span>(<span class="str">'/cpu     -&gt; bat dau TINH 3s'</span>);
+    <span class="kw">const</span> batDau = <span class="fn">Date.now</span>();
+    <span class="kw">while</span> (<span class="fn">Date.now</span>() - batDau &lt; <span class="num">3000</span>) {
+      <span class="cmt">// Vòng lặp rỗng: CPU quay hết công suất, không có await nào.</span>
+      <span class="cmt">// Đây là chỗ luồng duy nhất của Node bị GIAM.</span>
+    }
+    <span class="fn">nhatKy</span>(<span class="str">'/cpu     -&gt; tinh xong, tra loi'</span>);
+    response.<span class="fn">writeHead</span>(<span class="num">200</span>, { <span class="str">'Content-Type'</span>: <span class="str">'text/plain; charset=utf-8'</span> });
+    <span class="kw">return</span> response.<span class="fn">end</span>(<span class="str">'cpu xong\n'</span>);
+  }
+
+  response.<span class="fn">writeHead</span>(<span class="num">404</span>, { <span class="str">'Content-Type'</span>: <span class="str">'text/plain; charset=utf-8'</span> });
+  response.<span class="fn">end</span>(<span class="str">'khong tim thay\n'</span>);
+});
+
+server.<span class="fn">listen</span>(<span class="num">3340</span>, () => {
+  console.<span class="fn">log</span>(<span class="str">'Server dang nghe tai http://localhost:3340'</span>);
+});</code></pre>
+  </div>
+
+  <div class="code-block">
+    <span class="code-label">bash — tab 1: chạy server, để nguyên đó suốt bài</span>
+<pre><code><span class="kw">cd</span> ~/Documents/youtube/fullstack/elearning-api
+node lab/03-event-loop.mjs</code></pre>
+  </div>
+
+  <div class="callout tip">
+    <div class="ct">🔎 Vì sao dùng <code>setTimeout</code> để giả lập database?</div>
+    <p style="margin-bottom:0">
+      Nói cho sòng phẳng: <code>setTimeout</code> là <em>hẹn giờ</em>, không phải I/O thật. Nhưng với
+      event loop thì hai thứ này cư xử <strong>y hệt nhau</strong>: cả hai đều là "đăng ký một việc cho
+      bên ngoài, nhả luồng ra, quay lại khi có kết quả". Dùng timer để bạn đo được con số
+      <em>chính xác 3 giây</em> mỗi lần chạy, thay vì phụ thuộc vào database hôm nay nhanh hay chậm.
+    </p>
+  </div>
+
+  <h2>3. Thí nghiệm A — trong lúc <em>chờ</em>, server có rảnh không?</h2>
+
+  <p>
+    Mở <strong>tab 2</strong>. Gọi <code>/io</code> (chạy nền, sẽ mất 3 giây), rồi <em>ngay lập tức</em>
+    gọi <code>/nhanh</code> và bấm giờ:
+  </p>
+
+  <div class="code-block">
+    <span class="code-label">bash — tab 2</span>
+<pre><code><span class="cmt"># Dấu &amp; ở cuối = đẩy lệnh này chạy nền, không đợi nó xong.</span>
+curl -s http://localhost:3340/io &amp;
+
+<span class="cmt"># Đợi 0.3s cho chắc là /io đã bắt đầu, rồi bấm giờ /nhanh.</span>
+sleep <span class="num">0.3</span>
+<span class="fn">time</span> curl -s http://localhost:3340/nhanh</code></pre>
+  </div>
+
+  <div class="code-block">
+    <span class="code-label">kết quả THẬT (đã đo, Node v22.18.0 / Apple M1)</span>
+<pre><code>nhanh
+<span class="cmt"># /nhanh mat: 0.029 giay</span></code></pre>
+  </div>
+
+  <p>
+    <strong>0,03 giây.</strong> Trong khi <code>/io</code> vẫn đang chờ. Nhìn sang tab 1 — nhật ký của
+    server kể lại toàn bộ câu chuyện:
+  </p>
+
+  <div class="code-block">
+    <span class="code-label">tab 1 — log THẬT</span>
+<pre><code>[  <span class="num">964</span>ms] /io      -&gt; bat dau CHO 3s
+[ <span class="num">1281</span>ms] /nhanh   -&gt; tra loi ngay      <span class="cmt">&lt;-- CHEN VÀO GIỮA</span>
+[ <span class="num">3965</span>ms] /io      -&gt; cho xong, tra loi</code></pre>
+  </div>
+
+  <p>
+    Dòng <code>/nhanh</code> nằm <strong>lọt vào giữa</strong> lúc <code>/io</code> bắt đầu và lúc nó kết
+    thúc. Một luồng duy nhất, mà phục vụ được người thứ hai trong lúc người thứ nhất vẫn đang chờ.
+  </p>
+
+  <h2>4. Thí nghiệm B — đổi <em>chờ</em> thành <em>tính</em></h2>
+
+  <p>Y hệt thí nghiệm A, chỉ đổi <code>/io</code> thành <code>/cpu</code>. Đoán trước rồi hẵng chạy:</p>
+
+  <div class="code-block">
+    <span class="code-label">bash — tab 2</span>
+<pre><code>curl -s http://localhost:3340/cpu &amp;
+sleep <span class="num">0.3</span>
+<span class="fn">time</span> curl -s http://localhost:3340/nhanh</code></pre>
+  </div>
+
+  <div class="code-block">
+    <span class="code-label">kết quả THẬT (đã đo)</span>
+<pre><code>nhanh
+<span class="cmt"># /nhanh mat: 2.706 giay   &lt;-- gap 90 lan thi nghiem A</span></code></pre>
+  </div>
+
+  <div class="code-block">
+    <span class="code-label">tab 1 — log THẬT</span>
+<pre><code>[ <span class="num">4521</span>ms] /cpu     -&gt; bat dau TINH 3s
+[ <span class="num">7521</span>ms] /cpu     -&gt; tinh xong, tra loi
+[ <span class="num">7522</span>ms] /nhanh   -&gt; tra loi ngay      <span class="cmt">&lt;-- CHI 1ms SAU KHI /cpu XONG</span></code></pre>
+  </div>
+
+  <div class="callout why">
+    <div class="ct">💡 Đọc kỹ con số <code>7522</code> — nó là cả bài học</div>
+    <p style="margin-bottom:0">
+      Request <code>/nhanh</code> tới nơi từ giây thứ 4,8. Nhưng dòng log của nó chỉ hiện ra ở
+      <strong>7522ms — đúng 1 mili-giây sau khi <code>/cpu</code> xong</strong>. Nghĩa là suốt 2,7 giây
+      đó, request của bạn <em>đã nằm sẵn ở cửa</em>, hệ điều hành đã nhận nó rồi, mà Node
+      <strong>không hề biết</strong> — vì luồng duy nhất đang kẹt trong vòng <code>while</code>.
+      Không có gì "xử lý chậm" ở đây cả: nó <em>còn chưa được nhìn tới</em>.
+    </p>
+  </div>
+
+  <h2>5. Đo thông lượng: 3 giây hay 15 giây?</h2>
+
+  <p>
+    Hai thí nghiệm trên mới có 2 request. Giờ bắn <strong>5 request cùng lúc</strong> vào từng route và
+    đo tổng thời gian. Đây là lúc khác biệt trở nên tàn nhẫn:
+  </p>
+
+  <div class="code-block">
+    <span class="code-label">bash — tab 2 · <code>xargs -P5</code> = chạy 5 lệnh song song</span>
+<pre><code><span class="cmt"># 5 request đồng thời vào /io</span>
+<span class="fn">time</span> <span class="fn">seq</span> <span class="num">5</span> | xargs -P<span class="num">5</span> -I{} curl -s -o /dev/null http://localhost:3340/io
+
+<span class="cmt"># 5 request đồng thời vào /cpu</span>
+<span class="fn">time</span> <span class="fn">seq</span> <span class="num">5</span> | xargs -P<span class="num">5</span> -I{} curl -s -o /dev/null http://localhost:3340/cpu</code></pre>
+  </div>
+
+  <div class="code-block">
+    <span class="code-label">kết quả THẬT (đã đo)</span>
+<pre><code>5 request -&gt; /io  : <span class="num">3.03</span> giay
+5 request -&gt; /cpu : <span class="num">15.03</span> giay</code></pre>
+  </div>
+
+  <table class="data">
+    <thead><tr><th></th><th>5× <code>/io</code></th><th>5× <code>/cpu</code></th></tr></thead>
+    <tbody>
+      <tr><td>Tổng thời gian</td><td><strong>3,03s</strong></td><td><strong>15,03s</strong></td></tr>
+      <tr><td>Bằng</td><td>≈ thời gian của <em>một</em> request</td><td>≈ <em>cộng dồn</em> cả 5 (5 × 3s)</td></tr>
+      <tr><td>Nghĩa là</td><td>5 người được phục vụ <strong>cùng lúc</strong></td><td>5 người <strong>xếp hàng</strong>, ai tới sau chịu đủ</td></tr>
+      <tr><td>Người thứ 5 đợi</td><td>3 giây</td><td><span class="nullcell">15 giây</span></td></tr>
+    </tbody>
+  </table>
+
+  <div class="callout danger">
+    <div class="ct">🚨 Đây là dạng sự cố production bạn sẽ gặp thật</div>
+    <p style="margin-bottom:0">
+      Hình dung API e-learning của bạn có endpoint xuất báo cáo, chạy 3 giây CPU. Ngày thường chẳng ai
+      để ý. Rồi 20 người bấm cùng lúc → người cuối đợi <strong>60 giây</strong>, và trong 60 giây đó
+      <em>toàn bộ website chết</em>: trang chủ không load, đăng nhập không được, thanh toán treo.
+      Biểu đồ CPU 100%, log không một dòng lỗi. Đây chính xác là kiểu sự cố mà mission của bạn ghi
+      <em>"debug được sự cố production: chậm ở đâu"</em> — và giờ bạn biết chỗ đầu tiên phải nhìn.
+    </p>
+  </div>
+
+  <h2>6. Cơ chế: vì sao lại như vậy</h2>
+
+  <p>
+    Node có <strong>một luồng chạy JavaScript</strong>. Cái vòng lặp điều phối nó gọi là
+    <strong>event loop</strong>, và nó chỉ làm đúng một việc, lặp đi lặp lại:
+  </p>
+
+  <div class="code-block">
+    <span class="code-label">event loop — mô tả bằng lời</span>
+<pre><code>lặp mãi mãi:
+  <span class="num">1</span>. Chạy hết code đang có cho tới khi KHÔNG CÒN GÌ để chạy
+  <span class="num">2</span>. Nhìn xem có việc nào bên ngoài báo "xong rồi" không
+     (timer tới hạn · database trả kết quả · dữ liệu mạng vừa tới)
+  <span class="num">3</span>. Lấy việc đó ra, chạy hàm tương ứng
+  <span class="num">4</span>. Quay lại bước 1</code></pre>
+  </div>
+
+  <p>
+    Chú ý bước 1: <strong>"cho tới khi không còn gì để chạy"</strong>. Event loop
+    <em>không có quyền</em> cắt ngang code của bạn giữa chừng. Nó phải đợi bạn trả luồng lại.
+    Vòng <code>while</code> ở <code>/cpu</code> không bao giờ trả — nên bước 2 không bao giờ tới lượt.
+  </p>
+
+  <p>Chứng minh trong 10 dòng. Tạo <code>lab/03-thu-tu.mjs</code>:</p>
+
+  <div class="code-block">
+    <span class="code-label">elearning-api/lab/03-thu-tu.mjs</span>
+<pre><code><span class="kw">const</span> t0 = <span class="fn">Date.now</span>();
+
+console.<span class="fn">log</span>(<span class="str">'1 - chay ngay lap tuc'</span>);
+
+<span class="cmt">// Hẹn 0 mili-giây. Tức là "chạy càng sớm càng tốt".</span>
+<span class="fn">setTimeout</span>(() => {
+  console.<span class="fn">log</span>(<span class="str">`4 - timer chay sau </span>${<span class="fn">Date.now</span>() - t0}<span class="str">ms (ta hen 0ms!)`</span>);
+}, <span class="num">0</span>);
+
+<span class="fn">Promise.resolve</span>().<span class="fn">then</span>(() => console.<span class="fn">log</span>(<span class="str">'3 - microtask'</span>));
+
+console.<span class="fn">log</span>(<span class="str">'2 - cung chay ngay lap tuc'</span>);
+
+<span class="cmt">// Giam luồng 2 giây — không nhả cho ai cả.</span>
+<span class="kw">while</span> (<span class="fn">Date.now</span>() - t0 &lt; <span class="num">2000</span>) {
+}
+
+console.<span class="fn">log</span>(<span class="str">`-- vong lap chan xong sau </span>${<span class="fn">Date.now</span>() - t0}<span class="str">ms --`</span>);</code></pre>
+  </div>
+
+  <div class="code-block">
+    <span class="code-label">bash</span>
+<pre><code>node lab/03-thu-tu.mjs</code></pre>
+  </div>
+
+  <div class="code-block">
+    <span class="code-label">output THẬT (đã verify)</span>
+<pre><code><span class="num">1</span> - chay ngay lap tuc
+<span class="num">2</span> - cung chay ngay lap tuc
+-- vong lap chan xong sau <span class="num">2000</span>ms --
+<span class="num">3</span> - microtask
+<span class="num">4</span> - timer chay sau <span class="num">2000</span>ms (ta hen 0ms!)</code></pre>
+  </div>
+
+  <div class="callout why">
+    <div class="ct">💡 <code>setTimeout(..., 0)</code> không có nghĩa là "chạy sau 0ms"</div>
+    <p>
+      Nó nghĩa là <strong>"xếp hàng, chạy sớm nhất có thể sau khi luồng rảnh"</strong>. Ở đây luồng bận
+      2 giây, nên cái hẹn 0ms chạy sau <strong>2000ms</strong>. Số 0 là <em>lời hứa sớm nhất</em>,
+      không phải <em>đảm bảo</em>.
+    </p>
+    <p style="margin-bottom:0">
+      Đây chính là lời giải thích cho thí nghiệm B ở quy mô nhỏ: request <code>/nhanh</code> cũng chỉ là
+      một "việc đang xếp hàng", và nó phải đợi vòng <code>while</code> nhả luồng — y như cái timer này.
+      <em>Thứ tự 3 trước 4</em> (microtask trước timer) là chi tiết của Bài 04; giờ chỉ cần nhớ:
+      <strong>cả hai đều phải đợi code đồng bộ chạy xong.</strong>
+    </p>
+  </div>
+
+  <h2>7. Nửa sự thật còn lại: "bất đồng bộ" không phải lúc nào cũng là event loop</h2>
+
+  <p>
+    Nếu dừng ở đây bạn sẽ mang theo một hiểu lầm, và nó sẽ cắn bạn ở <strong>Bài 22</strong> khi ta băm
+    mật khẩu. Hiểu lầm đó là: <em>"cứ có <code>await</code> thì không chặn"</em>.
+  </p>
+
+  <p>
+    Một số việc CPU-nặng trong Node <em>có</em> bản bất đồng bộ, và chúng không chạy trên event loop mà
+    chạy trên một <strong>nhóm luồng phụ</strong> (thread pool) do thư viện libuv quản lý.
+    <a href="https://nodejs.org/docs/latest-v22.x/api/cli.html#uv_threadpool_sizesize" target="_blank">Docs Node</a>
+    liệt kê rõ những API dùng nhóm luồng này: <em>toàn bộ <code>fs</code></em>,
+    <em><code>crypto.pbkdf2()</code></em>, <code>dns.lookup()</code>… và nói luôn số luồng mặc định là
+    <strong>4</strong>.
+  </p>
+
+  <p>Con số đo thật, cùng một phép băm mật khẩu 4 triệu vòng:</p>
+
+  <table class="data">
+    <thead><tr><th>Chạy gì</th><th>Mất</th><th>Nói lên điều gì</th></tr></thead>
+    <tbody>
+      <tr><td>1 lần, bản <code>Sync</code></td><td>1453 ms</td><td>Mốc tham chiếu — và nó chặn event loop</td></tr>
+      <tr><td><strong>4</strong> lần bất đồng bộ cùng lúc</td><td>1757 ms</td><td>Gần bằng <em>một</em> lần → 4 việc chạy <strong>song song thật</strong> trên 4 luồng</td></tr>
+      <tr><td><strong>8</strong> lần bất đồng bộ cùng lúc</td><td>3716 ms</td><td><span class="nullcell">Gấp đôi</span> → 4 cái chạy trước, 4 cái đợi. Nhóm luồng đã đầy.</td></tr>
+    </tbody>
+  </table>
+
+  <div class="callout warn">
+    <div class="ct">⚠️ Đừng vội đi chỉnh <code>UV_THREADPOOL_SIZE</code> cho to</div>
+    <p style="margin-bottom:0">
+      Tôi đã thử tăng lên 8 trên máy này: <strong>gần như không nhanh hơn</strong> (3716ms → 3484ms).
+      Lý do rất đời: thêm luồng không đẻ ra thêm CPU. Máy M1 có 8 nhân nhưng chỉ 4 nhân hiệu năng cao,
+      nên việc CPU-nặng bị chặn bởi <em>phần cứng</em>, không phải bởi con số cấu hình.
+      <strong>Bài học:</strong> việc CPU-nặng không có chỗ nào để giấu trong một request — cách đúng là
+      đẩy nó ra khỏi vòng đời request, giao cho một <em>hàng đợi</em> xử lý nền. Đó là Bài 37 (BullMQ),
+      và giờ bạn đã biết vì sao bài đó phải tồn tại.
+    </p>
+  </div>
+
+  <div class="quiz">
+    <h3>🧠 Kiểm tra nhanh (bấm để có phản hồi ngay)</h3>
+
+    <div class="q">Câu 1. Endpoint query database mất 3 giây. 10 người gọi cùng lúc. Người thứ 10 đợi khoảng bao lâu?</div>
+    <button class="opt" data-correct="true" data-explain="Đúng. Chờ database là I/O — Node đăng ký việc rồi nhả luồng, nên 10 request cùng chờ song song. Bạn đã đo chính xác điều này ở phần 5: 5 request vào /io mất 3,03s chứ không phải 15s. Lưu ý thực tế: giới hạn thật sự sẽ đến từ connection pool của database (Bài 42), không phải từ Node.">A. Khoảng 3 giây — mọi người chờ song song</button>
+    <button class="opt" data-correct="false" data-explain="Đây là kết quả của việc CPU-nặng (10 × 3s), không phải của việc chờ I/O. Bạn đang áp nhầm kết luận của /cpu cho /io — chính là sự nhầm lẫn mà cả bài này sinh ra để gỡ.">B. Khoảng 30 giây — mỗi người phải đợi người trước xong</button>
+    <button class="opt" data-correct="false" data-explain="Node không tự sinh tiến trình hay luồng cho mỗi request — một luồng JavaScript phục vụ tất cả. Điều làm nó phục vụ được 10 người cùng lúc là việc NHẢ LUỒNG trong lúc chờ, không phải nhân bản luồng.">C. Khoảng 3 giây, vì Node tạo 10 luồng cho 10 request</button>
+    <div class="feedback"></div>
+
+    <div class="q">Câu 2. Bạn viết <code>await</code> trước một hàm resize ảnh chạy 2 giây bằng CPU thuần. Server có phục vụ được người khác trong 2 giây đó không?</div>
+    <button class="opt" data-correct="false" data-explain="Không. Đây là hiểu lầm tốn kém nhất về async. Từ khoá await KHÔNG biến việc CPU thành việc chờ — nó chỉ có tác dụng khi bên dưới thật sự có thứ gì đó nhả luồng ra. Bọc await quanh một vòng lặp tính toán thì luồng vẫn bị giam y nguyên.">A. Có — <code>await</code> làm nó thành bất đồng bộ nên không chặn</button>
+    <button class="opt" data-correct="true" data-explain="Đúng. await chỉ là cú pháp để CHỜ một Promise; nó không hề đẩy công việc đi đâu cả. Nếu hàm resize tính toán ngay trên luồng chính thì luồng vẫn kẹt 2 giây, có await hay không cũng vậy. Chỉ khi công việc thật sự được giao cho bên ngoài (hệ điều hành, nhóm luồng libuv, tiến trình khác) thì luồng mới được nhả.">B. Không — <code>await</code> không đẩy việc đi đâu cả, luồng vẫn bị giam</button>
+    <button class="opt" data-correct="false" data-explain="Không có cơ chế tự động nào như vậy. Node không tự phát hiện 'việc này nặng quá, để tôi chuyển sang luồng khác'. Muốn đẩy sang luồng khác bạn phải chủ động (worker_threads, hoặc hàng đợi ở Bài 37).">C. Có, vì Node tự chuyển việc nặng sang thread pool</button>
+    <div class="feedback"></div>
+
+    <div class="q">Câu 3. Ở phần 6, vì sao <code>setTimeout(..., 0)</code> lại chạy sau 2000ms?</div>
+    <button class="opt" data-correct="false" data-explain="Không phải giới hạn kỹ thuật. Đúng là setTimeout có độ trễ tối thiểu vài mili-giây, nhưng ở đây độ trễ là 2000ms — bằng đúng thời gian vòng while chạy. Đó không phải trùng hợp.">A. Vì <code>setTimeout</code> có độ trễ tối thiểu khoảng 2 giây</button>
+    <button class="opt" data-correct="true" data-explain="Chính xác. Event loop chỉ đi lấy việc đã tới hạn SAU KHI code đồng bộ chạy xong hết. Timer đã tới hạn từ lâu và nằm chờ, nhưng vòng while chưa nhả luồng nên không ai đi lấy nó. Đây cũng là lời giải thích cho thí nghiệm B: request /nhanh cũng chỉ là một việc đang xếp hàng như cái timer này.">B. Vì event loop chỉ lấy việc ra chạy khi code đồng bộ đã chạy xong — mà vòng <code>while</code> giam luồng 2 giây</button>
+    <button class="opt" data-correct="false" data-explain="Timer đã được đăng ký ngay từ đầu, trước cả vòng while, và đồng hồ của nó chạy độc lập. Nó tới hạn từ mili-giây đầu tiên — vấn đề chỉ là không ai rảnh để đi lấy nó ra chạy.">C. Vì vòng lặp <code>while</code> làm timer bị đăng ký muộn</button>
+    <div class="feedback"></div>
+
+    <div class="q">Câu 4. Câu nào mô tả đúng nhất "Node.js là một luồng"?</div>
+    <button class="opt" data-correct="false" data-explain="Sai — cả tiến trình Node có nhiều luồng: nhóm luồng libuv (mặc định 4) chạy fs và crypto bất đồng bộ, cộng thêm các luồng nội bộ của V8. Bạn đã tự đo ở phần 7: 4 phép băm chạy cùng lúc mất gần bằng 1 phép.">A. Tiến trình Node chỉ có đúng một luồng, không hơn</button>
+    <button class="opt" data-correct="true" data-explain="Đúng và chính xác về mặt chữ nghĩa. Chỉ có MỘT luồng chạy code JavaScript của bạn; xung quanh nó vẫn có nhóm luồng libuv làm việc I/O và một số việc CPU (pbkdf2, fs). Nói 'Node một luồng' mà không nói rõ 'một luồng CHẠY JS' là chỗ khiến người ta hiểu sai cả hai hướng.">B. Chỉ có một luồng <em>chạy code JavaScript của bạn</em>; ngoài ra vẫn có nhóm luồng lo I/O và vài việc CPU</button>
+    <button class="opt" data-correct="false" data-explain="Ngược hoàn toàn. Nếu Node tạo luồng cho mỗi request thì nó đã giống hệt mô hình của PHP/Java truyền thống, và cũng chẳng cần event loop làm gì. Chính việc KHÔNG tạo luồng mỗi request là lý do Node chịu được rất nhiều kết nối đồng thời với ít bộ nhớ.">C. Node tạo một luồng mới cho mỗi request để xử lý song song</button>
+    <div class="feedback"></div>
+
+    <div class="q">Câu 5. API e-learning của bạn có endpoint xuất báo cáo PDF mất 5 giây CPU. Cách xử lý đúng là gì?</div>
+    <button class="opt" data-correct="false" data-explain="Không giải quyết được gì. Bạn đã đo ở phần 7: tăng UV_THREADPOOL_SIZE từ 4 lên 8 gần như không nhanh hơn (3716ms → 3484ms), vì thêm luồng không đẻ ra thêm CPU. Đây là cách 'vá' phổ biến mà không hiệu quả.">A. Tăng <code>UV_THREADPOOL_SIZE</code> lên thật to</button>
+    <button class="opt" data-correct="false" data-explain="Bọc await quanh một việc CPU chạy trên luồng chính không đẩy nó đi đâu cả — đúng như câu 2. Server vẫn đứng hình đủ 5 giây.">B. Bọc nó trong <code>async/await</code> để không chặn</button>
+    <button class="opt" data-correct="true" data-explain="Đúng. Việc CPU-nặng không có chỗ giấu bên trong một request: nó phải RA KHỎI vòng đời request. Mẫu chuẩn là API nhận yêu cầu rồi trả 202 kèm một mã việc, một tiến trình nền làm PDF, người dùng hỏi lại sau hoặc được thông báo khi xong. Đó chính là Bài 37 (BullMQ) trong lộ trình.">C. Đẩy ra hàng đợi xử lý nền, API trả về ngay kèm mã việc để tra sau</button>
+    <div class="feedback"></div>
+  </div>
+
+  <div class="callout tip">
+    <div class="ct">✅ Bạn vừa đạt được</div>
+    <ul class="checklist">
+      <li>Tách được hai loại "chậm": <em>chờ</em> (I/O) và <em>bận</em> (CPU) — và biết chỉ loại thứ hai mới giết server</li>
+      <li>Đo thật: 5 request vào <code>/io</code> = 3s, vào <code>/cpu</code> = 15s</li>
+      <li>Đọc được nhật ký có mốc thời gian để chứng minh ai chen được vào giữa ai</li>
+      <li>Giải thích được vì sao <code>setTimeout(..., 0)</code> chạy sau 2000ms</li>
+      <li>Biết <code>await</code> <strong>không</strong> biến việc CPU thành việc không chặn</li>
+      <li>Biết nhóm luồng libuv mặc định là 4, và vì sao tăng nó lên không cứu được việc CPU-nặng</li>
+    </ul>
+  </div>
+
+  <h2>8. Câu hỏi tư duy (bắc cầu sang Bài 04)</h2>
+
+  <p>
+    Ở phần 6, thứ tự in ra là <code>1 → 2 → 3 (microtask) → 4 (timer)</code>. Cả <code>3</code> và
+    <code>4</code> đều đợi luồng rảnh, nhưng <strong>microtask luôn chạy trước timer</strong>, kể cả khi
+    timer đã tới hạn từ lâu. Vì sao lại có hai hàng đợi riêng, và cái nào được ưu tiên?
+  </p>
+  <p>
+    Câu hỏi thứ hai, nặng ký hơn — và nó nối thẳng vào tai nạn ở Bài 02. Bạn đã thấy lỗi ném ra trong
+    handler <code>async</code> làm chết cả tiến trình. Vậy:
+    <strong>khi một Promise bị từ chối mà không ai <code>catch</code>, cái lỗi đó đi đâu?</strong>
+    Nó không có <code>try/catch</code> nào bao quanh ở thời điểm nó xảy ra — vì hàm gọi nó đã chạy xong
+    từ lâu và đã rời khỏi stack rồi.
+  </p>
+  <p>
+    Trả lời được câu đó là bạn hiểu vì sao <code>try/catch</code> quanh một callback
+    <strong>không hề bắt được lỗi bên trong callback đó</strong> — cái bẫy làm mất rất nhiều giờ debug
+    của người mới chuyển từ frontend sang backend. Bài 04 mổ nó ra.
+  </p>
+
+  <div class="next-box">
+    <div class="nl">→ Bài tiếp theo</div>
+    <div class="nt">Bài 04 · Async trong Node: callback → Promise → async/await, và lỗi đi đâu</div>
+    <p class="nd">Ba thế hệ cú pháp cho cùng một việc, và một câu hỏi xuyên suốt: khi mọi thứ hỏng, cái lỗi rơi vào tay ai — hay không rơi vào tay ai cả.</p>
+  </div>
+
+  <div class="navbar">
+    <a href="0002-request-response.html">← Trước</a>
+    <a href="index.html">🏠 Mục lục</a>
+    <a href="0004-async-va-loi.html">Sau →</a>
+  </div>
+
+  <p class="try-it">
+    💬 <strong>Chạy tới đâu thấy lạ thì hỏi ngay.</strong> Không có bài tập phải nộp — con số bạn đo
+    được ở phần 3–5 chính là cái win của bài. Nếu số của bạn lệch nhiều so với số trong bài, gửi tôi xem.
+  </p>
+
+</div>
+<script src="lesson-enhance.js"></script>
+</body>
+</html>
