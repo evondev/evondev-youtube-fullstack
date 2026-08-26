@@ -394,7 +394,7 @@ curl -s http://localhost:3333/courses/abc</code></pre>
   </p>
   <p>
     Giờ ta thêm <code>POST /courses</code> để tạo khoá học mới. Client gửi lên
-    <code>{ "title": "abc", "price": "rất rẻ" }</code> — <code>price</code> là chuỗi, không phải số.
+    <code>{ "title": "abc", "price": "very cheap" }</code> — <code>price</code> là chuỗi, không phải số.
     <strong>Ai chặn nó lại?</strong> <code>ParseIntPipe</code> chỉ lo được một tham số trên đường dẫn,
     còn đây là cả một object trong body.
   </p>

@@ -19,7 +19,7 @@
   <div class="callout bridge">
     <div class="ct">🌉 Bắc cầu từ Bài 05</div>
     <p>
-      Cuối Bài 05 tôi hỏi: client gửi <code>{ "title": "abc", "price": "rất rẻ" }</code> —
+      Cuối Bài 05 tôi hỏi: client gửi <code>{ "title": "abc", "price": "very cheap" }</code> —
       <strong>ai chặn nó lại?</strong> <code>ParseIntPipe</code> chỉ lo được <em>một</em> tham số trên
       đường dẫn, còn đây là cả một object trong body.
     </p>
@@ -34,8 +34,44 @@
   <h2>1. Vì sao TypeScript <em>không</em> cứu được bạn ở đây</h2>
 
   <p>
-    Ở Bài 05 controller viết <code>@Body() dto: CreateCourseDto</code>, kiểu rõ ràng. Phản xạ tự nhiên:
-    "có TypeScript rồi, sai kiểu là nó báo". <strong>Sai.</strong>
+    Phản xạ tự nhiên của người từ TypeScript sang: <em>"khai kiểu rõ ràng rồi, sai kiểu là nó báo"</em>.
+    <strong>Sai</strong> — và bằng chứng đã nằm sẵn trong Bài 05, chỉ là lúc đó ta chưa dừng lại nhìn nó.
+  </p>
+
+  <p>Nhớ lại route lấy một khoá học:</p>
+
+  <div class="code-block">
+    <span class="code-label">Bài 05 — courses.controller.ts</span>
+<pre><code><span class="kw">@Get</span>(<span class="str">':id'</span>)
+<span class="fn">findOne</span>(<span class="kw">@Param</span>(<span class="str">'id'</span>, ParseIntPipe) id: <span class="kw">number</span>): Course { ... }</code></pre>
+  </div>
+
+  <p>
+    Tham số đã khai <code>id: <strong>number</strong></code> đàng hoàng. Vậy mà ta <em>vẫn</em> phải nhét
+    thêm <code>ParseIntPipe</code> vào. <strong>Vì sao?</strong> Tôi đã thử bỏ nó ra và in thẳng giá trị
+    nhận được:
+  </p>
+
+  <div class="code-block">
+    <span class="code-label">bỏ ParseIntPipe, chỉ để <code>id: number</code> — output THẬT (đã chạy)</span>
+<pre><code>GET /courses/abc  →  {<span class="str">"value"</span>:<span class="str">"abc"</span>,<span class="str">"typeofId"</span>:<span class="str">"string"</span>}
+GET /courses/7    →  {<span class="str">"value"</span>:<span class="str">"7"</span>,  <span class="str">"typeofId"</span>:<span class="str">"string"</span>}</code></pre>
+  </div>
+
+  <p>
+    Đọc kỹ <strong>dòng thứ hai</strong>. Ngay cả khi client gửi đúng số, <code>id</code> vẫn là
+    <strong>chuỗi <code>"7"</code></strong>, không phải số <code>7</code>. Khai
+    <code>id: number</code> chỉ là <em>lời hứa với chính bạn</em>, không hề đúng lúc chạy — và
+    <code>id + 1</code> sẽ cho ra <code>"71"</code> chứ không phải <code>8</code>.
+  </p>
+
+  <p>
+    Cái <code>400</code> bạn thấy ở Bài 05 là do <em>pipe</em> tạo ra, <strong>không</strong> phải do
+    TypeScript. Tức là bạn đã dùng một công cụ kiểm-tra-lúc-chạy từ Bài 05 mà chưa gọi tên nó.
+  </p>
+
+  <p>
+    Bài này mở rộng đúng ý đó: từ <em>một tham số trên đường dẫn</em> ra <em>cả một object trong body</em>.
   </p>
 
   <div class="code-block">
