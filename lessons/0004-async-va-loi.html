@@ -89,10 +89,10 @@ exit=<span class="num">1</span></code></pre>
 
   <div class="code-block">
     <span class="code-label">đọc từ dưới lên</span>
-<pre><code>    at process.processTimers      <span class="cmt">&lt;-- 1. Node kiem tra "timer nao toi han?"</span>
-    at listOnTimeout              <span class="cmt">&lt;-- 2. Node lay callback ra</span>
-    at Timeout._onTimeout         <span class="cmt">&lt;-- 3. Node GOI callback cua ban</span>
-                                  <span class="cmt">&lt;-- KHONG CO DONG NAO NHAC TOI khoi try!</span></code></pre>
+<pre><code>    at process.processTimers      <span class="cmt">&lt;-- 1. Node kiểm tra "timer nào tới hạn?"</span>
+    at listOnTimeout              <span class="cmt">&lt;-- 2. Node lấy callback ra</span>
+    at Timeout._onTimeout         <span class="cmt">&lt;-- 3. Node GỌI callback của bạn</span>
+                                  <span class="cmt">&lt;-- KHÔNG CÓ DÒNG NÀO NHẮC TỚI khối try!</span></code></pre>
   </div>
 
   <div class="callout why">

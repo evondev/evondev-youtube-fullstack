@@ -255,13 +255,13 @@ curl -s http://localhost:3333/courses/abc</code></pre>
 <pre><code><span class="cmt"># GET /courses</span>
 [{<span class="str">"id"</span>:<span class="num">1</span>,<span class="str">"title"</span>:<span class="str">"NestJS Fundamentals"</span>,<span class="str">"level"</span>:<span class="str">"beginner"</span>,<span class="str">"price"</span>:<span class="num">499000</span>}, ... ]
 
-<span class="cmt"># GET /courses?level=advanced   -&gt; loc dung 1 khoa</span>
+<span class="cmt"># GET /courses?level=advanced   → lọc đúng 1 khoá</span>
 [{<span class="str">"id"</span>:<span class="num">2</span>,<span class="str">"title"</span>:<span class="str">"Postgres for Backend"</span>,<span class="str">"level"</span>:<span class="str">"advanced"</span>,<span class="str">"price"</span>:<span class="num">799000</span>}]
 
-<span class="cmt"># GET /courses/99   -&gt; 404</span>
+<span class="cmt"># GET /courses/99   → 404</span>
 {<span class="str">"message"</span>:<span class="str">"Course with id=99 not found"</span>,<span class="str">"error"</span>:<span class="str">"Not Found"</span>,<span class="str">"statusCode"</span>:<span class="num">404</span>}
 
-<span class="cmt"># GET /courses/abc  -&gt; 400</span>
+<span class="cmt"># GET /courses/abc  → 400</span>
 {<span class="str">"message"</span>:<span class="str">"Validation failed (numeric string is expected)"</span>,<span class="str">"error"</span>:<span class="str">"Bad Request"</span>,<span class="str">"statusCode"</span>:<span class="num">400</span>}</code></pre>
   </div>
 
@@ -304,12 +304,12 @@ curl -s http://localhost:3333/courses/abc</code></pre>
 
   <div class="code-block">
     <span class="code-label">Nest làm gì lúc khởi động</span>
-<pre><code><span class="num">1</span>. Doc @Module -&gt; thay providers: [CoursesService]
-<span class="num">2</span>. Doc constructor cua CoursesController
-   -&gt; "no can mot CoursesService"
-<span class="num">3</span>. Tao MOT the hien CoursesService, cat vao so
-<span class="num">4</span>. Tao CoursesController, dua the hien do vao
-<span class="num">5</span>. Ai can CoursesService nua -&gt; dua LAI CAI CU, khong tao moi</code></pre>
+<pre><code><span class="num">1</span>. Đọc @Module  →  thấy providers: [CoursesService]
+<span class="num">2</span>. Đọc constructor của CoursesController
+   →  "nó cần một CoursesService"
+<span class="num">3</span>. Tạo MỘT thể hiện CoursesService, cất vào sổ
+<span class="num">4</span>. Tạo CoursesController, đưa thể hiện đó vào
+<span class="num">5</span>. Ai cần CoursesService nữa  →  đưa LẠI CÁI CŨ, không tạo mới</code></pre>
   </div>
 
   <p>

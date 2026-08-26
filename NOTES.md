@@ -209,7 +209,13 @@ Tuấn: *"code mọi thứ in english nha, chứ đừng level co ban nang cao n
 **Tiếng Anh:** tên biến/hàm/class · giá trị enum (`'beginner' | 'advanced'`, KHÔNG phải `'co-ban'`) ·
 route (`/fast` không phải `/nhanh`) · tên file code · chuỗi log · thông báo lỗi API · dữ liệu mẫu
 (tên khoá học...).
-**Tiếng Việt:** chỉ comment trong code (giữ nguyên rule global) + toàn bộ phần giảng giải.
+**Tiếng Việt:** comment trong code + toàn bộ phần giảng giải.
+
+⚠️ **Tiếng Việt trong code block phải CÓ DẤU ĐẦY ĐỦ** (Tuấn nhắc 2026-08-26). Đừng viết kiểu
+`Doc @Module -> thay providers` / `Tao MOT the hien` — chữ giải thích thì viết *"Đọc @Module → thấy
+providers"*, *"Tạo MỘT thể hiện"*. Áp cho cả comment, sơ đồ mô tả bằng lời, và chú thích `#` trong
+khối bash. Chỉ **output thật của máy** mới giữ nguyên văn.
+Dùng luôn ký tự mũi tên/khung thật (`→ ← │ ▼ └──`) thay cho `->` `|` `v` `+--` cho dễ đọc.
 
 ⚠️ **Đổi tên là output đổi theo** → phải CHẠY LẠI thật rồi dán output mới, không được sửa chữ suông.
 Đã làm đúng vậy khi sửa Bài 02–06 + cheat-sheet ngày 2026-08-26 (số liệu mới: body 5 byte→1 khúc,

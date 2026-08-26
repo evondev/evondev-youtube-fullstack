@@ -40,11 +40,11 @@
 
   <div class="code-block">
     <span class="code-label">sự thật cần khắc cốt</span>
-<pre><code>TypeScript kiem tra luc  BIEN DICH  (tren may ban)
-Du lieu ban lam den luc  CHAY THAT  (tren server)
+<pre><code>TypeScript kiểm tra lúc  BIÊN DỊCH  (trên máy bạn)
+Dữ liệu bẩn lại tới lúc  CHẠY THẬT   (trên server)
 
--&gt; Luc request toi noi, TypeScript DA BIEN MAT khoi file .js
--&gt; Khong con ai kiem tra gi ca</code></pre>
+→ Lúc request tới nơi, TypeScript ĐÃ BIẾN MẤT khỏi file .js
+→ Không còn ai kiểm tra gì cả</code></pre>
   </div>
 
   <p>
@@ -220,45 +220,45 @@ Mapped {/courses, POST} route</code></pre>
 
   <div class="code-block">
     <span class="code-label">bash — tab 2</span>
-<pre><code><span class="cmt"># 1. Hop le</span>
+<pre><code><span class="cmt"># 1. Hợp lệ</span>
 curl -s -X POST http://localhost:3333/courses -H <span class="str">'Content-Type: application/json'</span> \
   -d <span class="str">'{"title":"Redis in Practice","level":"advanced","price":599000}'</span>
 
-<span class="cmt"># 2. Sai ca 3 truong cung luc</span>
+<span class="cmt"># 2. Sai cả 3 trường cùng lúc</span>
 curl -s -X POST http://localhost:3333/courses -H <span class="str">'Content-Type: application/json'</span> \
   -d <span class="str">'{"title":"ab","level":"intermediate","price":-5}'</span>
 
-<span class="cmt"># 3. price la CHUOI</span>
+<span class="cmt"># 3. price là CHUỖI</span>
 curl -s -X POST http://localhost:3333/courses -H <span class="str">'Content-Type: application/json'</span> \
   -d <span class="str">'{"title":"Course","level":"beginner","price":"cheap"}'</span>
 
-<span class="cmt"># 4. Kem mot truong LA</span>
+<span class="cmt"># 4. Kèm một trường LẠ</span>
 curl -s -X POST http://localhost:3333/courses -H <span class="str">'Content-Type: application/json'</span> \
   -d <span class="str">'{"title":"Course","level":"beginner","price":100,"isAdmin":true}'</span>
 
-<span class="cmt"># 5. Thieu truong</span>
+<span class="cmt"># 5. Thiếu trường</span>
 curl -s -X POST http://localhost:3333/courses -H <span class="str">'Content-Type: application/json'</span> \
   -d <span class="str">'{"title":"Only title"}'</span></code></pre>
   </div>
 
   <div class="code-block">
     <span class="code-label">output THẬT (đã verify — Nest 11, class-validator 0.15.1)</span>
-<pre><code><span class="cmt"># 1 -&gt; 201 Created</span>
+<pre><code><span class="cmt"># 1 → 201 Created</span>
 {<span class="str">"id"</span>:<span class="num">3</span>,<span class="str">"title"</span>:<span class="str">"Redis in Practice"</span>,<span class="str">"level"</span>:<span class="str">"advanced"</span>,<span class="str">"price"</span>:<span class="num">599000</span>}
 
-<span class="cmt"># 2 -&gt; 400, BAO CA BA LOI MOT LUOT</span>
+<span class="cmt"># 2 → 400, BÁO CẢ BA LỖI MỘT LƯỢT</span>
 {<span class="str">"message"</span>:[<span class="str">"title must be at least 3 characters"</span>,
              <span class="str">"level must be beginner or advanced"</span>,
              <span class="str">"price must not be negative"</span>],
  <span class="str">"error"</span>:<span class="str">"Bad Request"</span>,<span class="str">"statusCode"</span>:<span class="num">400</span>}
 
-<span class="cmt"># 3 -&gt; 400</span>
+<span class="cmt"># 3 → 400</span>
 {<span class="str">"message"</span>:[<span class="str">"price must not be negative"</span>,<span class="str">"price must be an integer"</span>],...}
 
-<span class="cmt"># 4 -&gt; 400  &lt;-- truong la bi da ra</span>
+<span class="cmt"># 4 → 400  ← trường lạ bị đá ra</span>
 {<span class="str">"message"</span>:[<span class="str">"property isAdmin should not exist"</span>],...}
 
-<span class="cmt"># 5 -&gt; 400</span>
+<span class="cmt"># 5 → 400</span>
 {<span class="str">"message"</span>:[<span class="str">"level must be beginner or advanced"</span>,
              <span class="str">"price must not be negative"</span>,<span class="str">"price must be an integer"</span>],...}</code></pre>
   </div>
@@ -294,25 +294,25 @@ curl -s -X POST http://localhost:3333/courses -H <span class="str">'Content-Type
 
   <div class="code-block">
     <span class="code-label">vòng đời một POST /courses</span>
-<pre><code>Client gui JSON tho
-      |
-      v
-[ Nest doc body, parse JSON ]        &lt;- Bai 02 ban tu viet tay
-      |
-      v
-[ class-transformer ]                 &lt;- JSON tho -&gt; the hien CreateCourseDto
-      |
-      v
-[ ValidationPipe + class-validator ]  &lt;- soi decorator
-      |            |
-      |            +--- sai -&gt; nem BadRequestException -&gt; 400 + danh sach loi
-      v                        (nghiep vu KHONG he chay)
+<pre><code>Client gửi JSON thô
+      │
+      ▼
+[ Nest đọc body, parse JSON ]         ← Bài 02 bạn tự viết tay
+      │
+      ▼
+[ class-transformer ]                 ← JSON thô → thể hiện CreateCourseDto
+      │
+      ▼
+[ ValidationPipe + class-validator ]  ← soi decorator
+      │            │
+      │            └── sai → ném BadRequestException → 400 + danh sách lỗi
+      ▼                     (nghiệp vụ KHÔNG hề chạy)
 [ CoursesController.create ]
-      |
-      v
-[ CoursesService.create ]             &lt;- toi day du lieu CHAC CHAN sach
-      |
-      v
+      │
+      ▼
+[ CoursesService.create ]             ← tới đây dữ liệu CHẮC CHẮN sạch
+      │
+      ▼
    201 Created</code></pre>
   </div>
 

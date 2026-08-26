@@ -29,13 +29,13 @@
 
   <div class="code-block">
     <span class="code-label">request &amp; response có cùng cấu trúc, chỉ khác dòng đầu</span>
-<pre><code>GET /courses?level=beginner HTTP/1.1   <span class="cmt">&lt;- 1. dong dau (method + duong dan + phien ban)</span>
-Host: localhost:3333                 <span class="cmt">&lt;- 2. cac header</span>
+<pre><code>GET /courses?level=beginner HTTP/1.1   <span class="cmt">← 1. dòng đầu (method + đường dẫn + phiên bản)</span>
+Host: localhost:3333                 <span class="cmt">← 2. các header</span>
 Content-Type: application/json
-                                     <span class="cmt">&lt;- 3. DONG TRONG (ranh gioi duy nhat!)</span>
-{<span class="str">"title"</span>:<span class="str">"abc"</span>}                     <span class="cmt">&lt;- 4. body (tuy chon)</span>
+                                     <span class="cmt">← 3. DÒNG TRỐNG (ranh giới duy nhất!)</span>
+{<span class="str">"title"</span>:<span class="str">"abc"</span>}                     <span class="cmt">← 4. body (tuỳ chọn)</span>
 
-HTTP/1.1 <span class="num">200</span> OK                       <span class="cmt">&lt;- response: phien ban + status + mo ta</span></code></pre>
+HTTP/1.1 <span class="num">200</span> OK                       <span class="cmt">← response: phiên bản + status + mô tả</span></code></pre>
   </div>
 
   <h2>2. Chọn status code trong 5 giây</h2>
@@ -69,17 +69,17 @@ HTTP/1.1 <span class="num">200</span> OK                       <span class="cmt"
 <pre><code><span class="kw">import</span> { createServer } <span class="kw">from</span> <span class="str">'node:http'</span>;
 
 <span class="kw">const</span> server = <span class="fn">createServer</span>(<span class="kw">async</span> (request, response) => {
-  <span class="cmt">// (1) request.url la CHUOI THO, dinh ca query -> phai tach</span>
+  <span class="cmt">// (1) request.url là CHUỖI THÔ, dính cả query → phải tách</span>
   <span class="kw">const</span> url = <span class="kw">new</span> <span class="fn">URL</span>(request.url, <span class="str">`http://</span>${request.headers.host}<span class="str">`</span>);
   url.pathname;                      <span class="cmt">// '/courses'</span>
-  url.searchParams.<span class="fn">get</span>(<span class="str">'level'</span>);    <span class="cmt">// 'beginner' | null (KHONG phai undefined)</span>
+  url.searchParams.<span class="fn">get</span>(<span class="str">'level'</span>);    <span class="cmt">// 'beginner' | null (KHÔNG phải undefined)</span>
 
-  <span class="cmt">// (2) body la STREAM, khong co san. Day chinh la "body parser".</span>
+  <span class="cmt">// (2) body là STREAM, không có sẵn. Đây chính là "body parser".</span>
   <span class="kw">let</span> raw = <span class="str">''</span>;
   <span class="kw">for await</span> (<span class="kw">const</span> chunk <span class="kw">of</span> request) raw += chunk;
-  <span class="kw">try</span> { JSON.<span class="fn">parse</span>(raw); } <span class="kw">catch</span> { <span class="cmt">/* PHAI bat, khong la CHET CA SERVER */</span> }
+  <span class="kw">try</span> { JSON.<span class="fn">parse</span>(raw); } <span class="kw">catch</span> { <span class="cmt">/* PHẢI bắt, không là CHẾT CẢ SERVER */</span> }
 
-  <span class="cmt">// (3) MOI nhanh deu phai ket thuc response, khong la client treo</span>
+  <span class="cmt">// (3) MỌI nhánh đều phải kết thúc response, không là client treo</span>
   response.<span class="fn">writeHead</span>(<span class="num">200</span>, { <span class="str">'Content-Type'</span>: <span class="str">'application/json; charset=utf-8'</span> });
   response.<span class="fn">end</span>(JSON.<span class="fn">stringify</span>({ ok: <span class="kw">true</span> }));
 });
@@ -139,15 +139,15 @@ server.<span class="fn">listen</span>(<span class="num">3333</span>);</code></pr
 
   <div class="code-block">
     <span class="code-label">luật của event loop</span>
-<pre><code>lap mai mai:
-  1. Chay HET code dang co  <span class="cmt">&lt;- KHONG the cat ngang code cua ban</span>
-  2. Xem viec nao ben ngoai bao "xong roi"
-  3. Chay ham tuong ung
-  4. Quay lai 1
+<pre><code>lặp mãi mãi:
+  1. Chạy HẾT code đang có  <span class="cmt">← KHÔNG thể cắt ngang code của bạn</span>
+  2. Xem việc nào bên ngoài báo "xong rồi"
+  3. Chạy hàm tương ứng
+  4. Quay lại 1
 
-=&gt; setTimeout(fn, 0) KHONG phai "chay sau 0ms"
-   ma la "chay som nhat co the SAU KHI luong ranh"
-   (do luong ban 2s -&gt; timer chay sau 2000ms)</code></pre>
+⇒ setTimeout(fn, 0) KHÔNG phải "chạy sau 0ms"
+   mà là "chạy sớm nhất có thể SAU KHI luồng rảnh"
+   (do luồng bận 2s → timer chạy sau 2000ms)</code></pre>
   </div>
 
   <table class="data">
@@ -180,18 +180,18 @@ server.<span class="fn">listen</span>(<span class="num">3333</span>);</code></pr
 
   <div class="code-block">
     <span class="code-label">ba cái bẫy, thuộc lòng</span>
-<pre><code><span class="cmt">// BAY 1: try/catch KHONG doi duoc. No chi bat cai no NGAY BAY GIO.</span>
+<pre><code><span class="cmt">// BẪY 1: try/catch KHÔNG đợi được. Nó chỉ bắt cái nổ NGAY BÂY GIỜ.</span>
 <span class="kw">try</span> { <span class="fn">setTimeout</span>(() => { <span class="kw">throw new</span> <span class="fn">Error</span>(<span class="str">'x'</span>); }, <span class="num">100</span>); }
-<span class="kw">catch</span> { <span class="cmt">/* KHONG BAO GIO CHAY - stack da rong khi callback chay */</span> }
+<span class="kw">catch</span> { <span class="cmt">/* KHÔNG BAO GIỜ CHẠY — stack đã rỗng khi callback chạy */</span> }
 
-<span class="cmt">// BAY 2: quen await -> tra 200 ROI MOI CHET (te nhat vi noi doi client)</span>
-<span class="kw">try</span> { <span class="fn">queryDatabase</span>(); }          <span class="cmt">// thieu await</span>
-<span class="kw">catch</span> { <span class="cmt">/* khong chay; vai ms sau tien trinh CHET */</span> }
+<span class="cmt">// BẪY 2: quên await → trả 200 RỒI MỚI CHẾT (tệ nhất vì nói dối client)</span>
+<span class="kw">try</span> { <span class="fn">queryDatabase</span>(); }          <span class="cmt">// thiếu await</span>
+<span class="kw">catch</span> { <span class="cmt">/* không chạy; vài ms sau tiến trình CHẾT */</span> }
 
-<span class="cmt">// BAY 3: luoi cuoi cung - de LOG, KHONG phai de song sot</span>
+<span class="cmt">// BẪY 3: lưới cuối cùng — để LOG, KHÔNG phải để sống sót</span>
 process.<span class="fn">on</span>(<span class="str">'unhandledRejection'</span>, (reason) => {
   logger.<span class="fn">error</span>(reason);
-  process.<span class="fn">exit</span>(<span class="num">1</span>);   <span class="cmt">// chay tiep voi trang thai do dang con NGUY HIEM HON</span>
+  process.<span class="fn">exit</span>(<span class="num">1</span>);   <span class="cmt">// chạy tiếp với trạng thái dở dang còn NGUY HIỂM HƠN</span>
 });</code></pre>
   </div>
 
@@ -199,18 +199,18 @@ process.<span class="fn">on</span>(<span class="str">'unhandledRejection'</span>
 
   <div class="code-block">
     <span class="code-label">4 file cho một nhóm tính năng</span>
-<pre><code><span class="cmt">// course.interface.ts — hinh dang du lieu (interface: bien mat luc build)</span>
+<pre><code><span class="cmt">// course.interface.ts — hình dạng dữ liệu (interface: biến mất lúc build)</span>
 <span class="kw">export interface</span> Course { id: <span class="kw">number</span>; title: <span class="kw">string</span>; }
 
-<span class="cmt">// courses.service.ts — NGHIEP VU. Khong mot chu nao ve HTTP.</span>
+<span class="cmt">// courses.service.ts — NGHIỆP VỤ. Không một chữ nào về HTTP.</span>
 <span class="kw">@Injectable</span>()
 <span class="kw">export class</span> CoursesService {
   <span class="fn">findOne</span>(id: <span class="kw">number</span>) {
-    <span class="kw">if</span> (!found) <span class="kw">throw new</span> <span class="fn">NotFoundException</span>(<span class="str">'...'</span>);  <span class="cmt">// -&gt; 404 tu dong</span>
+    <span class="kw">if</span> (!found) <span class="kw">throw new</span> <span class="fn">NotFoundException</span>(<span class="str">'...'</span>);  <span class="cmt">// → 404 tự động</span>
   }
 }
 
-<span class="cmt">// courses.controller.ts — CUA VAO HTTP</span>
+<span class="cmt">// courses.controller.ts — CỬA VÀO HTTP</span>
 <span class="kw">@Controller</span>(<span class="str">'courses'</span>)
 <span class="kw">export class</span> CoursesController {
   <span class="fn">constructor</span>(<span class="kw">private readonly</span> coursesService: CoursesService) {}  <span class="cmt">// DI</span>
@@ -219,11 +219,11 @@ process.<span class="fn">on</span>(<span class="str">'unhandledRejection'</span>
   <span class="fn">findOne</span>(<span class="kw">@Param</span>(<span class="str">'id'</span>, ParseIntPipe) id: <span class="kw">number</span>) { ... }
 }
 
-<span class="cmt">// courses.module.ts — GOM NHOM</span>
+<span class="cmt">// courses.module.ts — GOM NHÓM</span>
 <span class="kw">@Module</span>({ controllers: [CoursesController], providers: [CoursesService] })
 <span class="kw">export class</span> CoursesModule {}
 
-<span class="cmt">// app.module.ts — dang ky nhom voi ung dung</span>
+<span class="cmt">// app.module.ts — đăng ký nhóm với ứng dụng</span>
 <span class="kw">@Module</span>({ imports: [CoursesModule] })</code></pre>
   </div>
 
@@ -253,7 +253,7 @@ process.<span class="fn">on</span>(<span class="str">'unhandledRejection'</span>
 
   <div class="code-block">
     <span class="code-label">npm install class-validator class-transformer</span>
-<pre><code><span class="cmt">// dto/create-course.dto.ts — phai la CLASS (interface khong mang duoc decorator)</span>
+<pre><code><span class="cmt">// dto/create-course.dto.ts — phải là CLASS (interface không mang được decorator)</span>
 <span class="kw">export class</span> CreateCourseDto {
   <span class="kw">@IsString</span>({ message: <span class="str">'title must be a string'</span> })
   <span class="kw">@MinLength</span>(<span class="num">3</span>, { message: <span class="str">'title must be at least 3 characters'</span> })
@@ -263,11 +263,11 @@ process.<span class="fn">on</span>(<span class="str">'unhandledRejection'</span>
   <span class="kw">@IsInt</span>() <span class="kw">@Min</span>(<span class="num">0</span>)              price: <span class="kw">number</span>;
 }
 
-<span class="cmt">// main.ts — bat MOT LAN, ap cho moi route</span>
+<span class="cmt">// main.ts — bật MỘT LẦN, áp cho mọi route</span>
 app.<span class="fn">useGlobalPipes</span>(<span class="kw">new</span> <span class="fn">ValidationPipe</span>({
-  whitelist: <span class="kw">true</span>,             <span class="cmt">// cat bo truong khong khai bao</span>
-  forbidNonWhitelisted: <span class="kw">true</span>,  <span class="cmt">// co truong la -&gt; 400 luon</span>
-  transform: <span class="kw">true</span>,             <span class="cmt">// JSON tho -&gt; the hien class</span>
+  whitelist: <span class="kw">true</span>,             <span class="cmt">// cắt bỏ trường không khai báo</span>
+  forbidNonWhitelisted: <span class="kw">true</span>,  <span class="cmt">// có trường lạ → 400 luôn</span>
+  transform: <span class="kw">true</span>,             <span class="cmt">// JSON thô → thể hiện class</span>
 }));</code></pre>
   </div>
 
@@ -312,10 +312,10 @@ app.<span class="fn">useGlobalPipes</span>(<span class="kw">new</span> <span cla
 
   <div class="code-block">
     <span class="code-label">bash</span>
-<pre><code><span class="cmt"># Xem ca header lan body</span>
+<pre><code><span class="cmt"># Xem cả header lẫn body</span>
 curl -si http://localhost:3333/courses
 
-<span class="cmt"># Chi lay status code</span>
+<span class="cmt"># Chỉ lấy status code</span>
 curl -s -o /dev/null -w <span class="str">'%{http_code}\n'</span> http://localhost:3333/courses/99
 
 <span class="cmt"># POST JSON</span>
@@ -323,13 +323,13 @@ curl -s -X POST http://localhost:3333/courses \
   -H <span class="str">'Content-Type: application/json'</span> \
   -d <span class="str">'{"title":"abc","level":"beginner","price":100}'</span>
 
-<span class="cmt"># Bam gio mot request</span>
+<span class="cmt"># Bấm giờ một request</span>
 <span class="fn">time</span> curl -s http://localhost:3333/courses
 
-<span class="cmt"># Ban 5 request DONG THOI (do song song hay xep hang)</span>
+<span class="cmt"># Bắn 5 request ĐỒNG THỜI (đo song song hay xếp hàng)</span>
 <span class="fn">seq</span> <span class="num">5</span> | xargs -P<span class="num">5</span> -I{} curl -s -o /dev/null http://localhost:3333/courses
 
-<span class="cmt"># Xem ai dang chiem cong</span>
+<span class="cmt"># Xem ai đang chiếm cổng</span>
 lsof -nP -iTCP:<span class="num">3333</span> -sTCP:LISTEN</code></pre>
   </div>
 
