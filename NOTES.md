@@ -88,10 +88,10 @@ Cách đếm: số file trong `reference/` so với số bài trong `lessons/`.
 
 | Mốc | Trạng thái |
 |---|---|
-| Bài đã soạn | 7 (Bài 00 → Bài 06) |
+| Bài đã soạn | 10 (Bài 00 → Bài 09) |
 | Cheat-sheet đã có | 2 — `docker-lenh-thiet-yeu.html` (Module 0) · **`node-va-nestjs-tra-nhanh.html`** (gom Bài 01→06, soạn 2026-08-25) |
-| Số bài KỂ TỪ cheat-sheet gần nhất | **0** — vừa reset |
-| **Trigger kế tiếp** | Bài 11 (đủ 5 bài kể từ cheat-sheet gần nhất), hoặc khi Module 2 xong — cái nào tới trước |
+| Số bài KỂ TỪ cheat-sheet gần nhất | **3** (Bài 07, 08, 09) |
+| **Trigger kế tiếp** | 🔴 **Module 2 XONG ở Bài 09** → tới ngưỡng. Cheat-sheet kế: *NestJS thực chiến* (Module/DI, pipe, filter, config, middleware, AsyncLocalStorage). Soạn khi Tuấn học xong Bài 09, TRƯỚC khi vào Module 3. |
 
 ## Việc cần làm / theo dõi
 
@@ -224,6 +224,16 @@ Dùng luôn ký tự mũi tên/khung thật (`→ ← │ ▼ └──`) thay c
 Ghi chú: thông báo lỗi API cũng chuyển sang tiếng Anh (trước đó Bài 06 cố ý viết tiếng Việt và có hẳn
 callout giải thích). Callout đó đã viết lại thành *"vì sao tự viết message thay vì để mặc định"*, và
 nói rõ dịch cho người dùng cuối là việc của tầng i18n ở client.
+
+### ✅ Bài 07–09 đã soạn trước (2026-08-26) — verify trong BẢN COPY
+
+Tuấn yêu cầu soạn sẵn 07+08+09 để học một lần. Đã verify toàn bộ trong
+`scratchpad/b07` (copy project + symlink node_modules), **không đụng `src/` của Tuấn** — đúng rule dưới.
+- **Bài 07** exception filter: 5 nguồn lỗi → 1 khuôn; `SuperSecret123` KHÔNG lộ ra client nhưng log giữ đủ stack.
+- **Bài 08** config: `.env` sai → `exit=1`, liệt kê hết lỗi, app không lên. `@nestjs/config` ^4.0.4.
+- **Bài 09** request-id: `AsyncLocalStorage`, tôn trọng `x-request-id` client gửi, id vào cả body lỗi lẫn log.
+- Cả ba nối thành một mạch: hình dạng lỗi (07) → biết mình chạy ở đâu (08) → truy vết được là ai (09).
+- ⚠️ Bài 07 có route `boom` TẠM để demo 500 — bài đã dặn Tuấn xoá sau khi thử. Nhắc lại lúc chấm.
 
 ### 🛑 TUYỆT ĐỐI KHÔNG VERIFY TRONG `elearning-api/src/` — đã XOÁ CODE CỦA TUẤN (2026-08-26)
 

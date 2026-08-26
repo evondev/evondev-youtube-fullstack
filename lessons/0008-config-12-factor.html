@@ -1,0 +1,398 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Bài 08 · Config &amp; 12-factor: env, và kiểm cấu hình ngay lúc khởi động</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="lesson.css">
+</head>
+<body>
+<div class="wrap">
+
+  <span class="lesson-tag">Module 2 · Bài 08</span>
+  <h1>Config &amp; 12-factor: env, và kiểm cấu hình ngay lúc khởi động</h1>
+  <p class="subtitle">Cấu hình sai thì thà <em>không lên</em> còn hơn lên rồi chết lúc 2 giờ sáng.</p>
+  <p class="meta-line">⏱ ~40 phút · 🎯 Sản phẩm: API đọc cấu hình từ môi trường, và <strong>từ chối khởi động</strong> kèm danh sách lỗi cụ thể nếu cấu hình thiếu hoặc sai.</p>
+
+  <div class="callout bridge">
+    <div class="ct">🌉 Bắc cầu từ Bài 07</div>
+    <p>
+      Cuối Bài 07 tôi hỏi: code làm sao biết nó đang chạy ở <em>máy bạn</em> hay <em>production</em>?
+      Và nếu <code>JWT_SECRET</code> thiếu, bạn muốn hệ thống chạy tiếp với chuỗi rỗng hay từ chối khởi động?
+    </p>
+    <p style="margin-bottom:0">
+      Câu trả lời của bài này gói trong một chữ: <strong>fail fast</strong>. Cấu hình sai là loại lỗi
+      <em>chắc chắn sẽ gây hậu quả</em> — chỉ là chưa biết lúc nào. Phát hiện nó lúc khởi động tốn của
+      bạn 5 giây; phát hiện nó lúc có người đang thanh toán thì tốn hơn nhiều.
+    </p>
+  </div>
+
+  <h2>1. Vì sao cấu hình phải ra khỏi code</h2>
+
+  <p>
+    Nhìn lại <code>main.ts</code> hiện tại: <code>process.env.PORT ?? 3333</code>. Số <code>3333</code>
+    nằm cứng trong code. Giờ hình dung API này chạy ở ba nơi:
+  </p>
+
+  <table class="data">
+    <thead><tr><th></th><th>Máy bạn</th><th>Staging</th><th>Production</th></tr></thead>
+    <tbody>
+      <tr><td>Cổng</td><td>3333</td><td>8080</td><td>80</td></tr>
+      <tr><td>Database</td><td>localhost:5433</td><td>db-staging</td><td>db nội bộ có mật khẩu</td></tr>
+      <tr><td>Khoá ký JWT</td><td>gì cũng được</td><td>chuỗi test</td><td><span class="nullcell">bí mật thật</span></td></tr>
+      <tr><td>Cổng thanh toán</td><td>sandbox</td><td>sandbox</td><td>tiền thật</td></tr>
+    </tbody>
+  </table>
+
+  <p>
+    <strong>Cùng một đoạn code, ba bộ giá trị.</strong> Nguyên tắc
+    <a href="https://12factor.net/config" target="_blank">12-factor III</a> nói đúng một câu:
+    <em>lưu cấu hình trong môi trường, không trong code.</em>
+  </p>
+
+  <div class="callout danger">
+    <div class="ct">🚨 Phép thử để biết bạn đã tách đúng chưa</div>
+    <p style="margin-bottom:0">
+      12-factor đưa ra một câu hỏi rất sắc: <strong>bạn có dám public repo này lên GitHub ngay bây giờ
+      không?</strong> Nếu câu trả lời là "không, vì trong code có mật khẩu / khoá API" thì bạn chưa tách
+      xong. Với Tuấn điều này rất thật: repo khoá học <em>đang public</em>, và Module 5 sẽ có khoá cổng
+      thanh toán.
+    </p>
+  </div>
+
+  <h2>2. Cài <code>@nestjs/config</code></h2>
+
+  <div class="code-block">
+    <span class="code-label">bash</span>
+<pre><code><span class="kw">cd</span> ~/Documents/youtube/fullstack/elearning-api
+npm install @nestjs/config</code></pre>
+  </div>
+
+  <div class="code-block">
+    <span class="code-label">phiên bản đã verify</span>
+<pre><code>@nestjs/config  ^<span class="num">4.0</span>.<span class="num">4</span></code></pre>
+  </div>
+
+  <p>Tạo file <code>.env</code> ở <strong>gốc <code>elearning-api/</code></strong> (cùng chỗ với <code>package.json</code>):</p>
+
+  <div class="code-block">
+    <span class="code-label">elearning-api/.env</span>
+<pre><code>NODE_ENV=development
+PORT=3333
+JWT_SECRET=doi-chuoi-nay-o-production</code></pre>
+  </div>
+
+  <div class="callout warn">
+    <div class="ct">⚠️ Kiểm <code>.gitignore</code> NGAY — trước khi commit</div>
+    <p>
+      File <code>.env</code> <strong>không bao giờ</strong> được lên git. Nest CLI đã thêm sẵn, nhưng
+      đừng tin — kiểm tra bằng lệnh:
+    </p>
+    <div class="code-block" style="margin-top:8px">
+      <span class="code-label">bash</span>
+<pre><code>git check-ignore -v elearning-api/.env</code></pre>
+    </div>
+    <p style="margin-top:10px; margin-bottom:0">
+      In ra một dòng = đã bị bỏ qua, an toàn. <strong>Không in gì = CHƯA an toàn</strong>, phải thêm
+      <code>.env</code> vào <code>.gitignore</code> trước khi làm tiếp. Secret đã lên git công khai thì
+      coi như lộ vĩnh viễn — xoá commit sau cũng vô ích, vì nó đã nằm trong lịch sử và trong bản clone
+      của người khác.
+    </p>
+  </div>
+
+  <h2>3. Khai báo cấu hình mình cần — và ràng buộc của nó</h2>
+
+  <p>
+    Đây là chỗ hay nhất: ta <strong>dùng lại đúng <code>class-validator</code> của Bài 06</strong>, chỉ
+    đổi đối tượng được kiểm — từ "body người dùng gửi lên" sang "biến môi trường".
+  </p>
+
+  <div class="code-block">
+    <span class="code-label">bash</span>
+<pre><code><span class="fn">mkdir</span> -p src/config</code></pre>
+  </div>
+
+  <div class="code-block">
+    <span class="code-label">elearning-api/src/config/env.validation.ts</span>
+<pre><code><span class="kw">import</span> { plainToInstance } <span class="kw">from</span> <span class="str">'class-transformer'</span>;
+<span class="kw">import</span> {
+  IsEnum, IsInt, IsString, Max, Min, MinLength, validateSync,
+} <span class="kw">from</span> <span class="str">'class-validator'</span>;
+
+<span class="kw">export enum</span> Environment {
+  Development = <span class="str">'development'</span>,
+  Production = <span class="str">'production'</span>,
+  Test = <span class="str">'test'</span>,
+}
+
+<span class="cmt">// Khai báo MỌI biến môi trường mà ứng dụng cần, kèm ràng buộc.</span>
+<span class="kw">class</span> EnvironmentVariables {
+  <span class="kw">@IsEnum</span>(Environment, { message: <span class="str">'NODE_ENV must be development | production | test'</span> })
+  NODE_ENV!: Environment;
+
+  <span class="kw">@IsInt</span>({ message: <span class="str">'PORT must be an integer'</span> })
+  <span class="kw">@Min</span>(<span class="num">1</span>, { message: <span class="str">'PORT must be &gt;= 1'</span> })
+  <span class="kw">@Max</span>(<span class="num">65535</span>, { message: <span class="str">'PORT must be &lt;= 65535'</span> })
+  PORT!: <span class="kw">number</span>;
+
+  <span class="kw">@IsString</span>()
+  <span class="kw">@MinLength</span>(<span class="num">16</span>, { message: <span class="str">'JWT_SECRET must be at least 16 characters'</span> })
+  JWT_SECRET!: <span class="kw">string</span>;
+}
+
+<span class="cmt">// Nest gọi hàm này MỘT LẦN lúc khởi động. Ném lỗi ở đây = app không lên.</span>
+<span class="kw">export function</span> <span class="fn">validateEnv</span>(config: Record&lt;<span class="kw">string</span>, <span class="kw">unknown</span>&gt;) {
+  <span class="kw">const</span> parsed = <span class="fn">plainToInstance</span>(EnvironmentVariables, config, {
+    enableImplicitConversion: <span class="kw">true</span>,   <span class="cmt">// '3333' -&gt; 3333</span>
+  });
+
+  <span class="kw">const</span> errors = <span class="fn">validateSync</span>(parsed, { skipMissingProperties: <span class="kw">false</span> });
+
+  <span class="kw">if</span> (errors.length &gt; <span class="num">0</span>) {
+    <span class="kw">const</span> details = errors
+      .<span class="fn">flatMap</span>((error) => Object.<span class="fn">values</span>(error.constraints ?? {}))
+      .<span class="fn">map</span>((line) => <span class="str">`  - </span>${line}<span class="str">`</span>)
+      .<span class="fn">join</span>(<span class="str">'\n'</span>);
+
+    <span class="kw">throw new</span> <span class="fn">Error</span>(<span class="str">`\n❌ Cấu hình không hợp lệ:\n</span>${details}<span class="str">\n`</span>);
+  }
+
+  <span class="kw">return</span> parsed;
+}</code></pre>
+  </div>
+
+  <div class="callout why">
+    <div class="ct">💡 Vì sao <code>enableImplicitConversion</code> lại cần ở đây</div>
+    <p style="margin-bottom:0">
+      Biến môi trường <strong>luôn luôn là chuỗi</strong> — hệ điều hành không có khái niệm "số". Nên
+      <code>PORT</code> tới tay bạn là <code>"3333"</code>, và <code>@IsInt</code> sẽ trượt.
+      <code>enableImplicitConversion</code> bảo <code>class-transformer</code> tự đổi theo kiểu đã khai.
+      <em>Nghe quen không?</em> Đây đúng là chuyện <code>ParseIntPipe</code> ở Bài 06 — cùng một sự thật:
+      <strong>mọi thứ từ bên ngoài vào đều là chuỗi cho tới khi bạn tự đổi nó.</strong>
+    </p>
+  </div>
+
+  <h2>4. Nối vào ứng dụng</h2>
+
+  <div class="code-block">
+    <span class="code-label">elearning-api/src/app.module.ts</span>
+<pre><code><span class="kw">import</span> { ConfigModule } <span class="kw">from</span> <span class="str">'@nestjs/config'</span>;                <span class="cmt">// ← THÊM</span>
+<span class="kw">import</span> { validateEnv } <span class="kw">from</span> <span class="str">'./config/env.validation'</span>;       <span class="cmt">// ← THÊM</span>
+
+<span class="kw">@Module</span>({
+  imports: [
+    <span class="fn">ConfigModule.forRoot</span>({
+      isGlobal: <span class="kw">true</span>,          <span class="cmt">// khỏi phải import lại ở từng module</span>
+      validate: validateEnv,   <span class="cmt">// kiểm cấu hình NGAY lúc khởi động</span>
+    }),
+    CoursesModule,
+  ],
+  controllers: [AppController],
+  providers: [AppService],
+})
+<span class="kw">export class</span> AppModule {}</code></pre>
+  </div>
+
+  <p>Rồi đọc cấu hình <em>đã được kiểm</em> thay vì đọc thẳng <code>process.env</code>:</p>
+
+  <div class="code-block">
+    <span class="code-label">elearning-api/src/main.ts</span>
+<pre><code><span class="kw">import</span> { ConfigService } <span class="kw">from</span> <span class="str">'@nestjs/config'</span>;              <span class="cmt">// ← THÊM</span>
+
+<span class="cmt">// ... cuối bootstrap(), thay dòng app.listen cũ:</span>
+<span class="kw">const</span> config = app.<span class="fn">get</span>(ConfigService);
+<span class="kw">const</span> port = config.<span class="fn">get</span>&lt;<span class="kw">number</span>&gt;(<span class="str">'PORT'</span>, <span class="num">3333</span>);
+
+<span class="kw">await</span> app.<span class="fn">listen</span>(port);</code></pre>
+  </div>
+
+  <h2>5. Thí nghiệm: phá cấu hình xem chuyện gì xảy ra</h2>
+
+  <p>Chạy bình thường trước — phải lên được như thường:</p>
+
+  <div class="code-block">
+    <span class="code-label">bash</span>
+<pre><code>npm run start</code></pre>
+  </div>
+
+  <p>
+    Giờ <strong>cố tình phá</strong>. Sửa <code>.env</code> thành:
+  </p>
+
+  <div class="code-block">
+    <span class="code-label">elearning-api/.env — bản CỐ Ý SAI</span>
+<pre><code>NODE_ENV=dev
+PORT=khong-phai-so
+JWT_SECRET=123</code></pre>
+  </div>
+
+  <div class="code-block">
+    <span class="code-label">bash</span>
+<pre><code>npm run start; <span class="fn">echo</span> <span class="str">"exit=</span>$?<span class="str">"</span></code></pre>
+  </div>
+
+  <div class="code-block">
+    <span class="code-label">output THẬT (đã verify)</span>
+<pre><code>LOG [NestFactory] Starting Nest application...
+ERROR [ExceptionHandler] Error:
+❌ Cấu hình không hợp lệ:
+  - NODE_ENV must be development | production | test
+  - PORT must be &lt;= 65535
+  - PORT must be &gt;= 1
+  - PORT must be an integer
+  - JWT_SECRET must be at least 16 characters
+
+exit=<span class="num">1</span></code></pre>
+  </div>
+
+  <p>Thử tiếp ca <strong>thiếu hẳn</strong> một biến — xoá dòng <code>JWT_SECRET</code> đi:</p>
+
+  <div class="code-block">
+    <span class="code-label">output THẬT</span>
+<pre><code>❌ Cấu hình không hợp lệ:
+  - JWT_SECRET must be at least 16 characters
+  - JWT_SECRET must be a string
+
+exit=<span class="num">1</span></code></pre>
+  </div>
+
+  <div class="callout why">
+    <div class="ct">💡 Ba điều đáng giá trong output đó</div>
+    <ul style="margin-bottom:0">
+      <li><strong>App KHÔNG lên.</strong> Không có cửa nào để một tiến trình cấu hình sai lọt vào production.</li>
+      <li><strong>Liệt kê HẾT một lượt</strong>, không dừng ở lỗi đầu — sửa một lần là xong, y như chuyện
+        <code>messages</code> là mảng ở Bài 06–07.</li>
+      <li><strong><code>exit=1</code></strong>. Đây là chỗ quan trọng nhất mà ai cũng bỏ qua: Docker,
+        Kubernetes, systemd, CI — tất cả đều nhìn mã thoát để biết tiến trình sống hay chết.
+        Thoát bằng <code>1</code> nghĩa là cả dàn hạ tầng biết bản deploy này hỏng và
+        <strong>tự động dừng rollout</strong>. Nếu ta chỉ <code>console.log</code> cảnh báo rồi chạy tiếp,
+        hạ tầng tưởng mọi thứ ổn và cứ thế đưa bản hỏng ra cho người dùng.</li>
+    </ul>
+  </div>
+
+  <div class="callout danger">
+    <div class="ct">🚨 Vì sao "chạy tiếp với giá trị mặc định" là lựa chọn tệ</div>
+    <p style="margin-bottom:0">
+      Cách viết rất phổ biến: <code>const secret = process.env.JWT_SECRET ?? '';</code>. Trông vô hại,
+      thực tế là thảm hoạ chờ sẵn — hệ thống lên bình thường, ký token bằng <strong>chuỗi rỗng</strong>,
+      và <em>ai cũng giả mạo được token</em>. Không có lỗi nào báo, không có cảnh báo nào. Bạn chỉ biết
+      khi có người đã vào được tài khoản người khác.
+      <br><br>
+      Đây chính là câu hỏi tôi để lại cuối Bài 07, và câu trả lời là: <strong>từ chối khởi động</strong>.
+      Một hệ thống chết hẳn còn dễ chịu hơn nhiều so với một hệ thống chạy sai mà không ai biết.
+    </p>
+  </div>
+
+  <p><strong>Sửa <code>.env</code> về bản hợp lệ</strong> trước khi sang bài sau.</p>
+
+  <h2>6. Việc nhỏ nhưng đừng bỏ: <code>.env.example</code></h2>
+
+  <p>
+    <code>.env</code> không lên git — nên người tiếp theo clone repo về sẽ không biết cần những biến gì.
+    Tạo một file mẫu, <em>không chứa giá trị thật</em>, và file này <strong>thì commit</strong>:
+  </p>
+
+  <div class="code-block">
+    <span class="code-label">elearning-api/.env.example</span>
+<pre><code><span class="cmt"># Copy file này thành .env rồi điền giá trị thật</span>
+NODE_ENV=development
+PORT=3333
+<span class="cmt"># tối thiểu 16 ký tự — sinh bằng: openssl rand -hex 32</span>
+JWT_SECRET=</code></pre>
+  </div>
+
+  <div class="callout tip">
+    <div class="ct">🔎 Với Tuấn thì "người tiếp theo" là ai?</div>
+    <p style="margin-bottom:0">
+      Là <em>chính bạn</em> ở máy khác, là khách freelance nhận bàn giao, và là <strong>chính bạn ba
+      tháng sau</strong> khi đã quên sạch. <code>.env.example</code> là tài liệu rẻ nhất bạn từng viết —
+      và là thứ đầu tiên người ta mở khi nhận một repo lạ.
+    </p>
+  </div>
+
+  <div class="quiz">
+    <h3>🧠 Kiểm tra nhanh (bấm để có phản hồi ngay)</h3>
+
+    <div class="q">Câu 1. Vì sao <code>PORT=3333</code> trong <code>.env</code> lại làm <code>@IsInt</code> trượt nếu không bật <code>enableImplicitConversion</code>?</div>
+    <button class="opt" data-correct="true" data-explain="Đúng. Hệ điều hành không có khái niệm 'số' — biến môi trường LUÔN là chuỗi. PORT tới tay bạn là '3333' chứ không phải 3333. Đây đúng là chuyện ParseIntPipe ở Bài 06: mọi thứ từ bên ngoài vào đều là chuỗi cho tới khi bạn tự đổi.">A. Vì biến môi trường luôn là chuỗi — <code>"3333"</code> chứ không phải <code>3333</code></button>
+    <button class="opt" data-correct="false" data-explain="@IsInt hoạt động hoàn toàn bình thường. Vấn đề nằm ở dữ liệu đưa vào nó, không phải ở decorator.">B. Vì <code>@IsInt</code> không dùng được với biến môi trường</button>
+    <button class="opt" data-correct="false" data-explain="Không có giới hạn nào như vậy. Cùng bộ decorator của Bài 06, chỉ đổi đối tượng được kiểm — từ body người dùng sang biến môi trường.">C. Vì <code>class-validator</code> chỉ chạy được với body HTTP</button>
+    <div class="feedback"></div>
+
+    <div class="q">Câu 2. Cấu hình sai, ta chọn <code>throw</code> để app không khởi động. Vì sao không log cảnh báo rồi chạy tiếp cho "mềm dẻo"?</div>
+    <button class="opt" data-correct="false" data-explain="Ngược lại — chạy tiếp mới là rủi ro. Một hệ thống chạy với JWT_SECRET rỗng thì ai cũng giả mạo được token, mà không hề có lỗi nào báo.">A. Chạy tiếp an toàn hơn vì người dùng không bị gián đoạn</button>
+    <button class="opt" data-correct="true" data-explain="Đúng. Cấu hình sai là loại lỗi CHẮC CHẮN gây hậu quả, chỉ chưa biết lúc nào. Phát hiện lúc khởi động tốn 5 giây; phát hiện lúc có người đang thanh toán thì tốn hơn nhiều. Và exit=1 giúp Docker/K8s/CI biết mà tự dừng rollout — nếu chỉ log cảnh báo, hạ tầng tưởng ổn và cứ đưa bản hỏng ra cho người dùng.">B. Vì lỗi cấu hình chắc chắn sẽ gây hậu quả — chết sớm rẻ hơn chết muộn, và <code>exit=1</code> giúp hạ tầng tự dừng rollout</button>
+    <button class="opt" data-correct="false" data-explain="Nest không hề bắt buộc — bạn có thể không truyền `validate` và app vẫn lên bình thường với cấu hình bẩn. Đây là lựa chọn thiết kế có ý thức của bạn.">C. Vì Nest bắt buộc phải throw khi validate thất bại</button>
+    <div class="feedback"></div>
+
+    <div class="q">Câu 3. Đồng nghiệp viết <code>const secret = process.env.JWT_SECRET ?? '';</code>. Hậu quả nặng nhất là gì?</div>
+    <button class="opt" data-correct="false" data-explain="Không crash — và đó chính là chỗ nguy hiểm. Nó chạy rất bình thường, không một lời cảnh báo. Bug im lặng luôn tệ hơn bug ồn ào.">A. App crash ngay khi có request đầu tiên</button>
+    <button class="opt" data-correct="true" data-explain="Đúng. Token được ký bằng chuỗi rỗng — mà chuỗi rỗng thì ai cũng biết. Kẻ tấn công tự ký token hợp lệ cho bất kỳ user nào, kể cả admin. Không lỗi, không cảnh báo; bạn chỉ biết khi đã có người vào được tài khoản người khác. Đây đúng là lý do phải fail fast.">B. Token được ký bằng chuỗi rỗng — ai cũng tự tạo được token hợp lệ, mà không lỗi nào báo</button>
+    <button class="opt" data-correct="false" data-explain="Hiệu năng không đổi chút nào. Vấn đề hoàn toàn nằm ở bảo mật, và nó im lặng — đó là thứ làm nó nguy hiểm.">C. Hiệu năng giảm vì phải kiểm tra chuỗi rỗng mỗi lần</button>
+    <div class="feedback"></div>
+
+    <div class="q">Câu 4. File nào lên git, file nào không?</div>
+    <button class="opt" data-correct="false" data-explain="Ngược hoàn toàn — và đây là cách làm lộ secret nhanh nhất. .env chứa giá trị THẬT nên không bao giờ được lên git.">A. Commit <code>.env</code>, bỏ qua <code>.env.example</code></button>
+    <button class="opt" data-correct="true" data-explain="Đúng. .env chứa giá trị thật -> không bao giờ lên git. .env.example chỉ liệt kê TÊN biến, giá trị để trống -> commit để người sau biết cần gì. Kiểm bằng `git check-ignore -v elearning-api/.env`: có in ra là an toàn. Nhớ: secret đã lên git công khai coi như lộ vĩnh viễn — xoá commit sau cũng vô ích vì nó đã nằm trong lịch sử và trong bản clone của người khác.">B. Bỏ qua <code>.env</code>, commit <code>.env.example</code> (chỉ có tên biến, không có giá trị)</button>
+    <button class="opt" data-correct="false" data-explain="Không commit cái nào thì người tiếp theo clone repo về sẽ không biết cần khai báo những biến gì — kể cả chính bạn ba tháng sau. .env.example tồn tại đúng để giải quyết chuyện đó.">C. Không commit cả hai cho chắc</button>
+    <div class="feedback"></div>
+
+    <div class="q">Câu 5. Vì sao <code>isGlobal: true</code> trong <code>ConfigModule.forRoot</code>?</div>
+    <button class="opt" data-correct="false" data-explain="Không liên quan gì tới việc đọc file .env — ConfigModule đọc file dù có isGlobal hay không. isGlobal chỉ nói về phạm vi dùng lại trong DI.">A. Để nó đọc được file <code>.env</code> ở thư mục gốc</button>
+    <button class="opt" data-correct="true" data-explain="Đúng. Không có isGlobal, mỗi module muốn tiêm ConfigService đều phải tự import ConfigModule vào imports của mình. Cấu hình là thứ gần như module nào cũng cần, nên khai global một lần là hợp lý — đây là một trong số ít trường hợp global thật sự chính đáng.">B. Để mọi module tiêm được <code>ConfigService</code> mà không phải import lại</button>
+    <button class="opt" data-correct="false" data-explain="Việc validate do tuỳ chọn `validate` đảm nhiệm, không phải isGlobal. Bỏ isGlobal đi thì validate vẫn chạy như thường.">C. Để bật kiểm tra cấu hình lúc khởi động</button>
+    <div class="feedback"></div>
+  </div>
+
+  <div class="callout tip">
+    <div class="ct">✅ Dự án của bạn vừa lớn thêm</div>
+    <ul class="checklist">
+      <li>Cấu hình ra khỏi code, nằm trong <code>.env</code> — repo public được mà không lộ gì</li>
+      <li>App <strong>từ chối khởi động</strong> với <code>exit=1</code> khi cấu hình sai, kèm danh sách lỗi</li>
+      <li>Có <code>.env.example</code> làm tài liệu cho người tiếp theo</li>
+      <li>Dùng lại <code>class-validator</code> của Bài 06 cho một việc hoàn toàn khác</li>
+    </ul>
+  </div>
+
+  <h2>7. Câu hỏi tư duy (bắc cầu sang Bài 09)</h2>
+
+  <p>
+    Ở Bài 07 khi có lỗi <code>500</code>, filter ghi vào log <code>GET /courses/boom</code> kèm stack trace.
+    Giờ hình dung production lúc 9 giờ tối: <strong>200 request mỗi giây</strong>, log đổ ra liên tục.
+    Một khách hàng gọi điện: <em>"tôi vừa thanh toán và nó báo lỗi"</em>.
+  </p>
+  <p>
+    Bạn mở log ra và thấy hàng nghìn dòng. <strong>Làm sao biết dòng nào là của người đó?</strong>
+    Và giả sử tìm được dòng báo lỗi — làm sao biết <em>những việc gì đã chạy trước đó</em> trong cùng
+    request ấy, giữa hàng nghìn dòng của những người khác đan xen vào?
+  </p>
+  <p>
+    Câu hỏi khó hơn: một request đi qua middleware → controller → service → gọi database, mỗi chỗ log
+    một dòng. Làm sao <em>khâu nối</em> chúng lại mà <strong>không phải truyền một tham số
+    <code>requestId</code> qua từng hàm</strong>?
+  </p>
+
+  <div class="next-box">
+    <div class="nl">→ Bài tiếp theo</div>
+    <div class="nt">Bài 09 · Logging có cấu trúc + request-id: nhìn thấy hệ thống đang làm gì</div>
+    <p class="nd">Gắn cho mỗi request một mã định danh đi theo nó suốt vòng đời — kể cả sau <code>await</code> — mà không phải sửa chữ ký của một hàm nào.</p>
+  </div>
+
+  <div class="navbar">
+    <a href="0007-exception-filter.html">← Trước</a>
+    <a href="index.html">🏠 Mục lục</a>
+    <a href="0009-logging-request-id.html">Sau →</a>
+  </div>
+
+  <p class="try-it">
+    💬 <strong>Chạy tới đâu thấy lạ thì hỏi ngay.</strong> Thấy app từ chối khởi động với
+    <code>exit=1</code> và liệt kê đủ lỗi cấu hình — là bài này xong. Nhớ chạy
+    <code>git check-ignore -v elearning-api/.env</code> trước khi commit.
+  </p>
+
+</div>
+<script src="lesson-enhance.js"></script>
+</body>
+</html>

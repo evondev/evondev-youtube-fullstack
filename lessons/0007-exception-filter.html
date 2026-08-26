@@ -1,0 +1,386 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Bài 07 · Exception filter: vì sao lỗi API phải có "hình dạng" cố định</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="lesson.css">
+</head>
+<body>
+<div class="wrap">
+
+  <span class="lesson-tag">Module 2 · Bài 07</span>
+  <h1>Exception filter: vì sao lỗi API phải có "hình dạng" cố định</h1>
+  <p class="subtitle">API của bạn đang trả lỗi bằng <em>hai khuôn khác nhau</em> — và sắp có khuôn thứ ba. Bài này gom tất cả về một.</p>
+  <p class="meta-line">⏱ ~40 phút · 🎯 Sản phẩm: mọi lỗi — 400, 404, 500, cả lỗi bạn không lường trước — đều trả về cùng một hình dạng JSON, và <strong>không rò rỉ chi tiết nội bộ ra ngoài</strong>.</p>
+
+  <div class="callout bridge">
+    <div class="ct">🌉 Bắc cầu từ Bài 06</div>
+    <p>
+      Cuối Bài 06 tôi chỉ ra: lỗi validation trả <code>message</code> là <strong>mảng</strong>, còn lỗi
+      404 trả <code>message</code> là <strong>chuỗi</strong>. Cùng một API, hai khuôn.
+    </p>
+    <p style="margin-bottom:0">
+      Nghe như chuyện nhỏ. Nhưng hãy đứng ở phía <em>người gọi API</em>: họ phải viết
+      <code>Array.isArray(res.message) ? ... : ...</code> ở <strong>mọi chỗ hiển thị lỗi</strong>. Và đó
+      mới là hai khuôn — lát nữa bạn sẽ thấy khuôn thứ ba xuất hiện, thứ mà không ai chuẩn bị trước được.
+    </p>
+  </div>
+
+  <h2>1. Tự nhìn thấy vấn đề trước đã</h2>
+
+  <p>Bật API rồi gọi hai lỗi khác nhau:</p>
+
+  <div class="code-block">
+    <span class="code-label">bash</span>
+<pre><code>curl -s http://localhost:3333/courses/99
+curl -s -X POST http://localhost:3333/courses \
+  -H <span class="str">'Content-Type: application/json'</span> -d <span class="str">'{"title":"ab"}'</span></code></pre>
+  </div>
+
+  <div class="code-block">
+    <span class="code-label">output THẬT — để ý trường <code>message</code></span>
+<pre><code><span class="cmt"># 404 — message là CHUỖI</span>
+{<span class="str">"message"</span>:<span class="str">"Course with id=99 not found"</span>,<span class="str">"error"</span>:<span class="str">"Not Found"</span>,<span class="str">"statusCode"</span>:<span class="num">404</span>}
+
+<span class="cmt"># 400 — message là MẢNG</span>
+{<span class="str">"message"</span>:[<span class="str">"level must be beginner or advanced"</span>, ...],<span class="str">"error"</span>:<span class="str">"Bad Request"</span>,<span class="str">"statusCode"</span>:<span class="num">400</span>}</code></pre>
+  </div>
+
+  <div class="callout why">
+    <div class="ct">💡 Vì sao "hình dạng lỗi" là một phần của HỢP ĐỒNG API</div>
+    <p style="margin-bottom:0">
+      Client không đọc tài liệu để biết lỗi trông thế nào — họ viết code <em>một lần</em> rồi tin rằng
+      mọi lỗi đều giống nhau. Mỗi khuôn lỗi khác nhau là một nhánh <code>if</code> nữa trong code của
+      họ, và là một chỗ nữa để hỏng. Với API bạn giao cho khách freelance, đây là thứ họ chửi bạn
+      <em>sau</em> khi đã ký hợp đồng.
+    </p>
+  </div>
+
+  <h2>2. Khuôn thứ ba: lỗi bạn không hề lường trước</h2>
+
+  <p>
+    Hai khuôn trên ít ra còn do bạn chủ động ném ra. Giờ xem cái bạn <em>không</em> chủ động.
+    Thêm tạm route này vào <code>courses.controller.ts</code> — <strong>đặt TRƯỚC <code>@Get(':id')</code></strong>:
+  </p>
+
+  <div class="code-block">
+    <span class="code-label">elearning-api/src/courses/courses.controller.ts — thêm tạm</span>
+<pre><code><span class="cmt">// TẠM THỜI: để thấy lỗi không lường trước trông thế nào. Xoá sau khi thử.</span>
+<span class="kw">@Get</span>(<span class="str">'boom'</span>)
+<span class="fn">boom</span>(): <span class="kw">never</span> {
+  <span class="kw">throw new</span> <span class="fn">Error</span>(<span class="str">'Kết nối Postgres thất bại: password=SuperSecret123'</span>);
+}</code></pre>
+  </div>
+
+  <div class="callout warn">
+    <div class="ct">⚠️ Vì sao phải đặt TRƯỚC <code>@Get(':id')</code></div>
+    <p style="margin-bottom:0">
+      Nest khớp route <strong>theo thứ tự khai báo</strong>. Đặt sau thì <code>/courses/boom</code> rơi
+      vào <code>@Get(':id')</code>, <code>ParseIntPipe</code> thấy <code>"boom"</code> không phải số và
+      trả <code>400</code> — bạn sẽ tưởng code hỏng. <strong>Route cụ thể luôn phải đứng trước route có
+      tham số động.</strong> Đây là lỗi định tuyến kinh điển, gặp một lần là nhớ đời.
+    </p>
+  </div>
+
+  <div class="code-block">
+    <span class="code-label">bash</span>
+<pre><code>curl -s http://localhost:3333/courses/boom</code></pre>
+  </div>
+
+  <div class="code-block">
+    <span class="code-label">output THẬT (chưa có filter)</span>
+<pre><code>{<span class="str">"statusCode"</span>:<span class="num">500</span>,<span class="str">"message"</span>:<span class="str">"Internal server error"</span>}</code></pre>
+  </div>
+
+  <p>
+    Khuôn thứ ba: <strong>không có trường <code>error</code></strong>. Ba khuôn cho ba loại lỗi, trong
+    cùng một API mà bạn mới viết được hai ngày.
+  </p>
+
+  <div class="callout tip">
+    <div class="ct">🔎 Tin tốt giấu trong đây</div>
+    <p style="margin-bottom:0">
+      Bạn vừa ném một <code>Error</code> thường — đúng thứ đã <strong>giết cả tiến trình</strong> ở
+      Bài 04. Lần này server <em>vẫn sống</em>, client vẫn có câu trả lời. Nest đã bọc sẵn một lớp bắt
+      lỗi quanh mọi handler. Bài này là học cách <strong>thay lớp mặc định đó bằng lớp của bạn</strong>.
+    </p>
+  </div>
+
+  <h2>3. Viết filter của riêng bạn</h2>
+
+  <p>Tạo thư mục và file:</p>
+
+  <div class="code-block">
+    <span class="code-label">bash</span>
+<pre><code><span class="fn">mkdir</span> -p src/common/filters</code></pre>
+  </div>
+
+  <div class="code-block">
+    <span class="code-label">elearning-api/src/common/filters/all-exceptions.filter.ts</span>
+<pre><code><span class="kw">import</span> {
+  ArgumentsHost,
+  Catch,
+  ExceptionFilter,
+  HttpException,
+  HttpStatus,
+  Logger,
+} <span class="kw">from</span> <span class="str">'@nestjs/common'</span>;
+<span class="kw">import type</span> { Request, Response } <span class="kw">from</span> <span class="str">'express'</span>;
+
+<span class="cmt">// Hình dạng lỗi DUY NHẤT của toàn bộ API. Frontend chỉ cần học đúng cái này.</span>
+<span class="kw">interface</span> ErrorBody {
+  statusCode: <span class="kw">number</span>;
+  error: <span class="kw">string</span>;
+  messages: <span class="kw">string</span>[];
+  path: <span class="kw">string</span>;
+  timestamp: <span class="kw">string</span>;
+}
+
+<span class="cmt">// @Catch() để trống = bắt MỌI thứ ném ra, kể cả Error thường.</span>
+<span class="kw">@Catch</span>()
+<span class="kw">export class</span> AllExceptionsFilter <span class="kw">implements</span> ExceptionFilter {
+  <span class="kw">private readonly</span> logger = <span class="kw">new</span> <span class="fn">Logger</span>(AllExceptionsFilter.name);
+
+  <span class="fn">catch</span>(exception: <span class="kw">unknown</span>, host: ArgumentsHost) {
+    <span class="kw">const</span> ctx = host.<span class="fn">switchToHttp</span>();
+    <span class="kw">const</span> response = ctx.<span class="fn">getResponse</span>&lt;Response&gt;();
+    <span class="kw">const</span> request = ctx.<span class="fn">getRequest</span>&lt;Request&gt;();
+
+    <span class="kw">const</span> isHttpException = exception <span class="kw">instanceof</span> HttpException;
+    <span class="kw">const</span> statusCode = isHttpException
+      ? exception.<span class="fn">getStatus</span>()
+      : HttpStatus.INTERNAL_SERVER_ERROR;
+
+    <span class="cmt">// Gom mọi kiểu message về MỘT dạng: luôn là mảng chuỗi.</span>
+    <span class="kw">let</span> messages: <span class="kw">string</span>[];
+    <span class="kw">let</span> error: <span class="kw">string</span>;
+
+    <span class="kw">if</span> (isHttpException) {
+      <span class="kw">const</span> payload = exception.<span class="fn">getResponse</span>();
+      <span class="kw">if</span> (<span class="kw">typeof</span> payload === <span class="str">'string'</span>) {
+        messages = [payload];
+        error = exception.name;
+      } <span class="kw">else</span> {
+        <span class="kw">const</span> body = payload <span class="kw">as</span> { message?: <span class="kw">string</span> | <span class="kw">string</span>[]; error?: <span class="kw">string</span> };
+        messages = Array.<span class="fn">isArray</span>(body.message)
+          ? body.message
+          : [body.message ?? exception.message];
+        error = body.error ?? exception.name;
+      }
+    } <span class="kw">else</span> {
+      <span class="cmt">// Lỗi KHÔNG lường trước: ghi log đầy đủ cho mình,</span>
+      <span class="cmt">// trả ra ngoài câu chung chung. Xem phần 5 để hiểu vì sao.</span>
+      messages = [<span class="str">'Internal server error'</span>];
+      error = <span class="str">'Internal Server Error'</span>;
+      <span class="kw">this</span>.logger.<span class="fn">error</span>(
+        <span class="str">`</span>${request.method}<span class="str"> </span>${request.url}<span class="str">`</span>,
+        exception <span class="kw">instanceof</span> Error ? exception.stack : <span class="fn">String</span>(exception),
+      );
+    }
+
+    <span class="kw">const</span> body: ErrorBody = {
+      statusCode,
+      error,
+      messages,
+      path: request.url,
+      timestamp: <span class="kw">new</span> <span class="fn">Date</span>().<span class="fn">toISOString</span>(),
+    };
+
+    response.<span class="fn">status</span>(statusCode).<span class="fn">json</span>(body);
+  }
+}</code></pre>
+  </div>
+
+  <p>Bật nó lên trong <code>src/main.ts</code>:</p>
+
+  <div class="code-block">
+    <span class="code-label">elearning-api/src/main.ts — thêm 2 dòng</span>
+<pre><code><span class="kw">import</span> { AllExceptionsFilter } <span class="kw">from</span> <span class="str">'./common/filters/all-exceptions.filter'</span>;  <span class="cmt">// ← THÊM</span>
+
+<span class="cmt">// ... bên trong bootstrap(), đặt trước app.listen():</span>
+app.<span class="fn">useGlobalFilters</span>(<span class="kw">new</span> <span class="fn">AllExceptionsFilter</span>());   <span class="cmt">// ← THÊM</span></code></pre>
+  </div>
+
+  <h2>4. Chạy lại — giờ mọi lỗi cùng một khuôn</h2>
+
+  <div class="code-block">
+    <span class="code-label">bash — 5 loại lỗi khác nhau</span>
+<pre><code>curl -s http://localhost:3333/courses/99          <span class="cmt"># 404 do ta ném</span>
+curl -s http://localhost:3333/courses/abc         <span class="cmt"># 400 do pipe</span>
+curl -s http://localhost:3333/khong-co-route      <span class="cmt"># 404 do Nest</span>
+curl -s http://localhost:3333/courses/boom        <span class="cmt"># 500 không lường trước</span>
+curl -s -X POST http://localhost:3333/courses \
+  -H <span class="str">'Content-Type: application/json'</span> -d <span class="str">'{"title":"ab","level":"x","price":-5}'</span></code></pre>
+  </div>
+
+  <div class="code-block">
+    <span class="code-label">output THẬT (đã verify — Nest 11)</span>
+<pre><code>{<span class="str">"statusCode"</span>:<span class="num">404</span>,<span class="str">"error"</span>:<span class="str">"Not Found"</span>,
+ <span class="str">"messages"</span>:[<span class="str">"Course with id=99 not found"</span>],
+ <span class="str">"path"</span>:<span class="str">"/courses/99"</span>,<span class="str">"timestamp"</span>:<span class="str">"2026-08-26T16:15:21.054Z"</span>}
+
+{<span class="str">"statusCode"</span>:<span class="num">400</span>,<span class="str">"error"</span>:<span class="str">"Bad Request"</span>,
+ <span class="str">"messages"</span>:[<span class="str">"Validation failed (numeric string is expected)"</span>],
+ <span class="str">"path"</span>:<span class="str">"/courses/abc"</span>, ...}
+
+{<span class="str">"statusCode"</span>:<span class="num">404</span>,<span class="str">"error"</span>:<span class="str">"Not Found"</span>,
+ <span class="str">"messages"</span>:[<span class="str">"Cannot GET /khong-co-route"</span>],
+ <span class="str">"path"</span>:<span class="str">"/khong-co-route"</span>, ...}
+
+{<span class="str">"statusCode"</span>:<span class="num">500</span>,<span class="str">"error"</span>:<span class="str">"Internal Server Error"</span>,
+ <span class="str">"messages"</span>:[<span class="str">"Internal server error"</span>],
+ <span class="str">"path"</span>:<span class="str">"/courses/boom"</span>, ...}
+
+{<span class="str">"statusCode"</span>:<span class="num">400</span>,<span class="str">"error"</span>:<span class="str">"Bad Request"</span>,
+ <span class="str">"messages"</span>:[<span class="str">"title must be at least 3 characters"</span>,
+              <span class="str">"level must be beginner or advanced"</span>,
+              <span class="str">"price must not be negative"</span>],
+ <span class="str">"path"</span>:<span class="str">"/courses"</span>, ...}</code></pre>
+  </div>
+
+  <p>
+    Năm nguồn lỗi hoàn toàn khác nhau — <em>bạn ném</em>, <em>pipe ném</em>, <em>Nest ném</em>,
+    <em>tai nạn</em> — cùng đúng một khuôn. Frontend viết một hàm hiển thị lỗi, dùng cho cả API.
+  </p>
+
+  <div class="callout tip">
+    <div class="ct">🔎 Vì sao đổi <code>message</code> thành <code>messages</code></div>
+    <p style="margin-bottom:0">
+      Số nhiều là <strong>lời hứa về kiểu dữ liệu</strong>: nó <em>luôn</em> là mảng, kể cả khi chỉ có
+      một phần tử. Client viết <code>messages.map(...)</code> một lần, không bao giờ phải kiểm tra
+      <code>Array.isArray</code> nữa. Đặt tên đúng số ít/số nhiều là cách rẻ nhất để một API tự mô tả
+      chính nó.
+    </p>
+  </div>
+
+  <h2>5. Phần quan trọng nhất: đừng nói cho kẻ tấn công biết</h2>
+
+  <p>
+    Nhớ lại lỗi ta cố tình ném: <code>'Kết nối Postgres thất bại: password=SuperSecret123'</code>.
+    Kiểm xem client có thấy nó không:
+  </p>
+
+  <div class="code-block">
+    <span class="code-label">bash</span>
+<pre><code>curl -s http://localhost:3333/courses/boom | <span class="fn">grep</span> SuperSecret &amp;&amp; <span class="fn">echo</span> <span class="str">"LỘ"</span> || <span class="fn">echo</span> <span class="str">"AN TOÀN"</span></code></pre>
+  </div>
+
+  <div class="code-block">
+    <span class="code-label">kết quả THẬT</span>
+<pre><code>AN TOÀN</code></pre>
+  </div>
+
+  <p>Nhưng nhìn sang terminal chạy server:</p>
+
+  <div class="code-block">
+    <span class="code-label">log server — THẬT</span>
+<pre><code>ERROR [AllExceptionsFilter] GET /courses/boom
+Error: Kết nối Postgres thất bại: password=SuperSecret123
+    at CoursesController.boom (.../courses.controller.ts:<span class="num">29</span>:<span class="num">11</span>)
+    at ...</code></pre>
+  </div>
+
+  <div class="callout danger">
+    <div class="ct">🚨 Đây là ranh giới sống còn: log cho MÌNH, response cho NGƯỜI LẠ</div>
+    <p>
+      Thông báo lỗi mặc định của thư viện thường chứa thứ cực kỳ hữu ích cho kẻ tấn công: tên bảng, tên
+      cột, đường dẫn file trên server, phiên bản thư viện, đôi khi cả chuỗi kết nối. Đó là bản đồ hệ
+      thống của bạn, trao tận tay miễn phí.
+    </p>
+    <p style="margin-bottom:0">
+      Quy tắc: <strong>lỗi <code>5xx</code> không bao giờ được kể chi tiết ra ngoài.</strong> Lỗi
+      <code>4xx</code> thì ngược lại — <em>phải</em> nói rõ, vì đó là lỗi của client và họ cần biết để
+      sửa. Filter ở trên làm đúng như vậy: <code>HttpException</code> giữ nguyên message, còn lại nuốt
+      hết và chỉ ghi vào log.
+    </p>
+  </div>
+
+  <p>
+    <strong>Xoá route <code>boom</code></strong> đi trước khi sang bài sau — nó chỉ để thí nghiệm.
+  </p>
+
+  <div class="quiz">
+    <h3>🧠 Kiểm tra nhanh (bấm để có phản hồi ngay)</h3>
+
+    <div class="q">Câu 1. <code>@Catch()</code> để trống nghĩa là gì?</div>
+    <button class="opt" data-correct="false" data-explain="Ngược lại. Để trống nghĩa là bắt TẤT CẢ. Muốn bắt riêng một loại thì mới ghi tên vào, ví dụ @Catch(HttpException) chỉ bắt HttpException.">A. Không bắt gì cả, phải ghi rõ loại exception</button>
+    <button class="opt" data-correct="true" data-explain="Đúng. Để trống = bắt mọi thứ ném ra, kể cả Error thường không phải HttpException. Đó chính là điều làm nó thành lưới an toàn cuối cùng — lỗi bạn không lường trước cũng không lọt ra ngoài dưới dạng khuôn lạ.">B. Bắt MỌI exception, kể cả <code>Error</code> thường</button>
+    <button class="opt" data-correct="false" data-explain="Không có chuyện chỉ bắt lỗi trong controller. Filter bắt cả lỗi từ service, từ pipe, từ chỗ Nest tự ném (như 404 route không tồn tại) — bạn đã tự thấy đủ 5 nguồn ở phần 4.">C. Chỉ bắt lỗi phát sinh trong controller</button>
+    <div class="feedback"></div>
+
+    <div class="q">Câu 2. Vì sao lỗi <code>500</code> chỉ trả "Internal server error" mà không kể chi tiết?</div>
+    <button class="opt" data-correct="false" data-explain="Không phải chuyện dung lượng. Vài trăm byte không đáng gì so với giá trị debug — nếu đó là lý do thì ta đã trả chi tiết rồi.">A. Để tiết kiệm băng thông</button>
+    <button class="opt" data-correct="true" data-explain="Đúng. Message mặc định của thư viện hay chứa tên bảng, tên cột, đường dẫn file, phiên bản, đôi khi cả chuỗi kết nối — bản đồ hệ thống trao tận tay kẻ tấn công. Ranh giới: log cho MÌNH (đầy đủ), response cho NGƯỜI LẠ (chung chung). Ngược lại với 4xx: lỗi của client thì PHẢI nói rõ để họ sửa.">B. Vì chi tiết lỗi nội bộ là bản đồ hệ thống cho kẻ tấn công — log giữ đủ, response thì không</button>
+    <button class="opt" data-correct="false" data-explain="Nest không hề bắt buộc. Bạn hoàn toàn trả được stack trace ra ngoài nếu muốn — và nhiều người vô tình làm vậy thật. Đây là lựa chọn có ý thức của bạn, không phải giới hạn của framework.">C. Vì Nest không cho phép trả chi tiết lỗi 500</button>
+    <div class="feedback"></div>
+
+    <div class="q">Câu 3. Vì sao đặt tên trường là <code>messages</code> (số nhiều) thay vì <code>message</code>?</div>
+    <button class="opt" data-correct="false" data-explain="Không liên quan tới chuẩn nào. REST không quy định hình dạng body lỗi — đó chính là lý do mỗi API mỗi kiểu, và là lý do bạn phải tự chọn một khuôn rồi giữ nó.">A. Vì chuẩn REST quy định vậy</button>
+    <button class="opt" data-correct="true" data-explain="Đúng. Số nhiều là lời hứa về KIỂU: luôn là mảng, kể cả khi chỉ có một phần tử. Client viết messages.map() một lần và không bao giờ phải kiểm Array.isArray nữa — đúng cái phiền toái mà Bài 06 để lại.">B. Vì nó hứa rằng trường này <em>luôn</em> là mảng, kể cả khi chỉ có một lỗi</button>
+    <button class="opt" data-correct="false" data-explain="Không có gì rõ hơn về mặt ngữ nghĩa cả — cả hai đều là 'thông báo lỗi'. Giá trị nằm ở chỗ nó cho client biết trước KIỂU dữ liệu, giúp họ khỏi viết nhánh phòng hờ.">C. Vì nghe rõ nghĩa hơn</button>
+    <div class="feedback"></div>
+
+    <div class="q">Câu 4. Bạn đặt <code>@Get('boom')</code> <em>sau</em> <code>@Get(':id')</code>. Gọi <code>/courses/boom</code> nhận được gì?</div>
+    <button class="opt" data-correct="false" data-explain="Không. Nest khớp route theo THỨ TỰ KHAI BÁO, không theo độ cụ thể. Route nào khai trước mà khớp thì thắng — /courses/:id khớp mọi thứ sau /courses/.">A. Vẫn vào <code>boom</code>, vì route cụ thể được ưu tiên</button>
+    <button class="opt" data-correct="true" data-explain="Đúng. /courses/:id khai trước nên nó nuốt luôn 'boom' làm giá trị id, ParseIntPipe thấy không phải số và ném 400. Bạn sẽ ngồi debug route boom trong khi nó chưa hề chạy. Quy tắc: route cụ thể luôn khai TRƯỚC route có tham số động.">B. <code>400</code> — vì <code>:id</code> nuốt mất "boom" và <code>ParseIntPipe</code> từ chối</button>
+    <button class="opt" data-correct="false" data-explain="Route vẫn tồn tại và vẫn có trong bảng route lúc khởi động — nó chỉ không bao giờ được gọi tới. Đó mới là chỗ khó chịu: không có lỗi nào báo cho bạn biết route bị che.">C. <code>404</code> — route bị vô hiệu hoàn toàn</button>
+    <div class="feedback"></div>
+
+    <div class="q">Câu 5. Ở Bài 04, ném <code>Error</code> trong handler <code>async</code> giết cả tiến trình. Sao giờ ném <code>Error</code> ở <code>/courses/boom</code> mà server vẫn sống?</div>
+    <button class="opt" data-correct="false" data-explain="Node không đổi hành vi gì cả — vẫn là Node v22 đó, unhandled rejection vẫn giết tiến trình như thường. Thứ thay đổi nằm ở tầng trên.">A. Vì Node xử lý lỗi khác khi chạy trong NestJS</button>
+    <button class="opt" data-correct="true" data-explain="Đúng. Nest bọc mỗi handler trong một lớp bắt lỗi, nên lỗi bị TÓM TRƯỚC KHI kịp trở thành unhandled rejection. Trong lab/ ở Bài 04 bạn không có lớp đó nên lỗi bay thẳng ra ngoài. Filter bạn vừa viết chính là thay lớp mặc định đó bằng lớp của mình.">B. Vì Nest bọc sẵn lớp bắt lỗi quanh handler — lỗi bị tóm trước khi thành unhandled rejection</button>
+    <button class="opt" data-correct="false" data-explain="Filter không phải thứ tạo ra sự an toàn đó — bỏ filter đi thì server VẪN sống, chỉ là trả về khuôn mặc định {statusCode, message}. Bạn đã tự thấy điều này ở phần 2, trước khi viết filter.">C. Vì filter bạn vừa viết đã ngăn tiến trình chết</button>
+    <div class="feedback"></div>
+  </div>
+
+  <div class="callout tip">
+    <div class="ct">✅ Dự án của bạn vừa lớn thêm</div>
+    <ul class="checklist">
+      <li>Mọi lỗi trong API trả về <strong>cùng một hình dạng</strong>, kèm <code>path</code> và <code>timestamp</code></li>
+      <li><code>messages</code> luôn là mảng — client hết phải đoán kiểu</li>
+      <li>Lỗi <code>5xx</code> <strong>không rò rỉ</strong> chi tiết nội bộ, nhưng log vẫn giữ đủ stack trace</li>
+      <li>Biết vì sao route cụ thể phải khai trước route có tham số động</li>
+    </ul>
+  </div>
+
+  <h2>6. Câu hỏi tư duy (bắc cầu sang Bài 08)</h2>
+
+  <p>
+    Trong filter bạn vừa viết có một quyết định bị giấu kín: <em>lúc nào thì được phép trả chi tiết lỗi
+    ra ngoài?</em> Hiện tại câu trả lời là "không bao giờ". Nhưng khi <strong>bạn</strong> đang chạy máy
+    local và tự debug, giấu chi tiết chính mình lại là phiền toái.
+  </p>
+  <p>
+    Vậy code phải biết <strong>nó đang chạy ở đâu</strong> — máy bạn hay production. Câu hỏi:
+    <em>thông tin đó đến từ đâu, và ai đảm bảo nó đúng?</em> Nếu ai đó deploy lên production mà quên
+    khai báo, code sẽ nghĩ mình đang ở đâu?
+  </p>
+  <p>
+    Câu nặng hơn: cùng logic đó áp cho <code>JWT_SECRET</code> ở Module 4. Nếu biến đó thiếu, bạn muốn
+    hệ thống <strong>chạy tiếp với chuỗi rỗng</strong>, hay <strong>từ chối khởi động</strong>?
+  </p>
+
+  <div class="next-box">
+    <div class="nl">→ Bài tiếp theo</div>
+    <div class="nt">Bài 08 · Config &amp; 12-factor: env, và kiểm cấu hình ngay lúc khởi động</div>
+    <p class="nd">Đưa mọi thứ thay đổi theo môi trường ra khỏi code, rồi bắt ứng dụng <em>từ chối khởi động</em> khi cấu hình sai — thay vì chết lúc 2 giờ sáng.</p>
+  </div>
+
+  <div class="navbar">
+    <a href="0006-dto-validation.html">← Trước</a>
+    <a href="index.html">🏠 Mục lục</a>
+    <a href="0008-config-12-factor.html">Sau →</a>
+  </div>
+
+  <p class="try-it">
+    💬 <strong>Chạy tới đâu thấy lạ thì hỏi ngay.</strong> Thấy đủ 5 loại lỗi ra cùng một khuôn, và
+    <code>grep SuperSecret</code> báo AN TOÀN — là bài này xong. Nhớ xoá route <code>boom</code>.
+  </p>
+
+</div>
+<script src="lesson-enhance.js"></script>
+</body>
+</html>

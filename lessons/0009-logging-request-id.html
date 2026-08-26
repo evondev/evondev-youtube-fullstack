@@ -1,0 +1,418 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Bài 09 · Logging có cấu trúc + request-id: nhìn thấy hệ thống đang làm gì</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="lesson.css">
+</head>
+<body>
+<div class="wrap">
+
+  <span class="lesson-tag">Module 2 · Bài 09</span>
+  <h1>Logging có cấu trúc + request-id: nhìn thấy hệ thống đang làm gì</h1>
+  <p class="subtitle">Khách gọi điện báo lỗi. Log có hàng nghìn dòng. Bài này làm cho việc tìm ra dòng của họ mất 5 giây thay vì 45 phút.</p>
+  <p class="meta-line">⏱ ~40 phút · 🎯 Sản phẩm: mỗi request có một mã định danh riêng, đi theo nó qua mọi tầng — kể cả sau <code>await</code> — xuất hiện trong log và trong cả body lỗi trả về client.</p>
+
+  <div class="callout bridge">
+    <div class="ct">🌉 Bắc cầu từ Bài 08</div>
+    <p>
+      Cuối Bài 08 tôi đặt tình huống: production 200 request/giây, khách gọi điện báo lỗi, bạn mở log ra
+      và thấy hàng nghìn dòng. <strong>Dòng nào là của người đó?</strong>
+    </p>
+    <p style="margin-bottom:0">
+      Và câu khó hơn: làm sao khâu nối các dòng log của <em>cùng một request</em> lại, khi chúng nằm rải
+      rác giữa log của hàng trăm người khác — mà <strong>không phải truyền <code>requestId</code> qua
+      từng hàm</strong>? Đó là phần hay nhất của bài này, và lời giải nằm ở một thứ có sẵn trong Node
+      mà rất ít người biết.
+    </p>
+  </div>
+
+  <h2>1. Nhìn thấy vấn đề đã</h2>
+
+  <p>Mở API và bắn vài request cùng lúc, rồi nhìn terminal chạy server:</p>
+
+  <div class="code-block">
+    <span class="code-label">bash</span>
+<pre><code><span class="fn">seq</span> <span class="num">5</span> | xargs -P<span class="num">5</span> -I{} curl -s -o /dev/null http://localhost:3333/courses/99</code></pre>
+  </div>
+
+  <p>
+    Log hiện ra 5 dòng lỗi <em>giống hệt nhau</em>, không phân biệt được. Nếu chúng xen kẽ với log của
+    request khác — mà production thì luôn như vậy — bạn không có cách nào biết dòng nào thuộc về ai.
+  </p>
+
+  <div class="callout why">
+    <div class="ct">💡 Vì sao đây là vấn đề của <em>backend</em> chứ không phải frontend</div>
+    <p style="margin-bottom:0">
+      Ở frontend, mỗi tab trình duyệt là một thế giới riêng: bạn mở DevTools của <em>đúng</em> người dùng
+      đó và thấy mọi thứ. Backend thì ngược lại — <strong>một tiến trình phục vụ tất cả mọi người cùng
+      lúc</strong> (đúng sự thật từ Bài 01), nên mọi dòng log của mọi người đổ chung vào một chỗ. Không có
+      cách nào tách ra <em>trừ khi bạn tự đánh dấu từ đầu</em>.
+    </p>
+  </div>
+
+  <h2>2. Ý tưởng: gắn thẻ cho mỗi request</h2>
+
+  <div class="code-block">
+    <span class="code-label">điều ta muốn đạt được</span>
+<pre><code>Request A tới  →  sinh id  a3f9...  →  mọi dòng log của nó mang [a3f9]
+Request B tới  →  sinh id  7c21...  →  mọi dòng log của nó mang [7c21]
+
+Log đổ chung một chỗ, nhưng lọc theo id là tách ra được:
+    grep "a3f9" app.log   →  chỉ còn hành trình của request A</code></pre>
+  </div>
+
+  <p>
+    Nghe đơn giản. Cái khó nằm ở chỗ: <strong>service ở tầng sâu làm sao biết id của request đang chạy?</strong>
+    Cách thô sơ là truyền nó xuống từng hàm:
+  </p>
+
+  <div class="code-block">
+    <span class="code-label">cách thô sơ — đừng làm</span>
+<pre><code><span class="fn">findAll</span>(level?: <span class="kw">string</span>, requestId?: <span class="kw">string</span>)
+<span class="fn">findOne</span>(id: <span class="kw">number</span>, requestId?: <span class="kw">string</span>)
+<span class="fn">create</span>(dto: CreateCourseDto, requestId?: <span class="kw">string</span>)
+<span class="cmt">// ... và MỌI hàm sau này, mãi mãi</span></code></pre>
+  </div>
+
+  <p>
+    Xấu, và lây lan: một hàm cần id thì cả chuỗi gọi phía trên nó đều phải nhận id để truyền xuống.
+    Nghiệp vụ bị nhiễm bẩn bởi một thứ chẳng liên quan gì tới nghiệp vụ.
+  </p>
+
+  <h2>3. Lời giải: <code>AsyncLocalStorage</code></h2>
+
+  <p>
+    Node có sẵn một thứ giải đúng bài toán này:
+    <a href="https://nodejs.org/docs/latest-v22.x/api/async_context.html" target="_blank"><code>AsyncLocalStorage</code></a>
+    trong module <code>node:async_hooks</code>. Hình dung nó là <strong>một ngăn kéo đi theo chuỗi
+    thực thi</strong>: bạn bỏ gì vào lúc bắt đầu request, thì mọi hàm chạy sau đó — <em>kể cả sau
+    <code>await</code></em> — đều mở ngăn kéo ra lấy được, mà không ai phải truyền tay nhau.
+  </p>
+
+  <div class="callout why">
+    <div class="ct">💡 Vì sao nó làm được điều đó — nối thẳng vào Bài 03</div>
+    <p style="margin-bottom:0">
+      Nhớ Bài 03: mỗi lần <code>await</code>, hàm của bạn <em>nhả luồng ra</em> và event loop chạy việc
+      của người khác; lát sau mới quay lại. Vậy làm sao Node biết "quay lại chỗ nào của ai"? Vì nó
+      <strong>vẫn theo dõi được chuỗi thực thi bất đồng bộ</strong> — đó chính là thứ
+      <code>async_hooks</code> phơi ra cho bạn dùng. <code>AsyncLocalStorage</code> bám vào đúng cơ chế
+      đó. Nói cách khác: <em>bài này chỉ làm được vì event loop hoạt động như Bài 03 đã mô tả.</em>
+    </p>
+  </div>
+
+  <div class="code-block">
+    <span class="code-label">bash</span>
+<pre><code><span class="fn">mkdir</span> -p src/common/middleware</code></pre>
+  </div>
+
+  <div class="code-block">
+    <span class="code-label">elearning-api/src/common/request-context.ts</span>
+<pre><code><span class="kw">import</span> { AsyncLocalStorage } <span class="kw">from</span> <span class="str">'node:async_hooks'</span>;
+
+<span class="kw">interface</span> RequestStore {
+  requestId: <span class="kw">string</span>;
+}
+
+<span class="cmt">// AsyncLocalStorage: "ngăn kéo" đi theo suốt chuỗi async của MỘT request,</span>
+<span class="cmt">// mà không phải truyền requestId qua từng tham số hàm.</span>
+<span class="kw">export const</span> requestContext = <span class="kw">new</span> AsyncLocalStorage&lt;RequestStore&gt;();
+
+<span class="kw">export function</span> <span class="fn">getRequestId</span>(): <span class="kw">string</span> | <span class="kw">undefined</span> {
+  <span class="kw">return</span> requestContext.<span class="fn">getStore</span>()?.requestId;
+}</code></pre>
+  </div>
+
+  <h2>4. Middleware sinh id</h2>
+
+  <div class="code-block">
+    <span class="code-label">elearning-api/src/common/middleware/request-id.middleware.ts</span>
+<pre><code><span class="kw">import</span> { Injectable, NestMiddleware } <span class="kw">from</span> <span class="str">'@nestjs/common'</span>;
+<span class="kw">import</span> { randomUUID } <span class="kw">from</span> <span class="str">'node:crypto'</span>;
+<span class="kw">import type</span> { NextFunction, Request, Response } <span class="kw">from</span> <span class="str">'express'</span>;
+<span class="kw">import</span> { requestContext } <span class="kw">from</span> <span class="str">'../request-context'</span>;
+
+<span class="kw">export const</span> REQUEST_ID_HEADER = <span class="str">'x-request-id'</span>;
+
+<span class="kw">@Injectable</span>()
+<span class="kw">export class</span> RequestIdMiddleware <span class="kw">implements</span> NestMiddleware {
+  <span class="fn">use</span>(request: Request, response: Response, next: NextFunction) {
+    <span class="cmt">// Tôn trọng id có sẵn (do gateway/client gửi), không có thì tự sinh.</span>
+    <span class="kw">const</span> incoming = request.<span class="fn">header</span>(REQUEST_ID_HEADER);
+    <span class="kw">const</span> requestId = incoming &amp;&amp; incoming.<span class="fn">trim</span>() !== <span class="str">''</span> ? incoming : <span class="fn">randomUUID</span>();
+
+    <span class="cmt">// Trả lại cho client để họ đọc được khi đi báo lỗi.</span>
+    response.<span class="fn">setHeader</span>(REQUEST_ID_HEADER, requestId);
+
+    <span class="cmt">// Mọi thứ chạy BÊN TRONG hàm này đều đọc được requestId, kể cả sau await.</span>
+    requestContext.<span class="fn">run</span>({ requestId }, () => <span class="fn">next</span>());
+  }
+}</code></pre>
+  </div>
+
+  <div class="callout tip">
+    <div class="ct">🔎 Vì sao phải "tôn trọng id có sẵn"</div>
+    <p style="margin-bottom:0">
+      Trong hệ thống thật, request của bạn thường đi qua nhiều chặng: trình duyệt → CDN → API gateway →
+      API của bạn → dịch vụ khác. Nếu mỗi chặng tự sinh id riêng thì <em>không nối lại được</em>. Quy ước
+      chung là: <strong>ai đó đã gắn id thì giữ nguyên, chưa ai gắn thì mình là người đầu tiên</strong>.
+      Nhờ vậy một id duy nhất xâu chuỗi được toàn bộ hành trình qua mọi hệ thống — đây là nền của
+      <em>distributed tracing</em>, thứ bạn sẽ gặp lại ở Bài về observability.
+    </p>
+  </div>
+
+  <h2>5. Logger tự dán id vào mỗi dòng</h2>
+
+  <div class="code-block">
+    <span class="code-label">elearning-api/src/common/app-logger.service.ts</span>
+<pre><code><span class="kw">import</span> { ConsoleLogger, Injectable } <span class="kw">from</span> <span class="str">'@nestjs/common'</span>;
+<span class="kw">import</span> { getRequestId } <span class="kw">from</span> <span class="str">'./request-context'</span>;
+
+<span class="cmt">// Kế thừa logger sẵn có của Nest, chỉ dán thêm requestId vào đầu mỗi dòng.</span>
+<span class="kw">@Injectable</span>()
+<span class="kw">export class</span> AppLogger <span class="kw">extends</span> ConsoleLogger {
+  <span class="kw">private</span> <span class="fn">tag</span>(message: <span class="kw">unknown</span>): <span class="kw">string</span> {
+    <span class="kw">const</span> requestId = <span class="fn">getRequestId</span>();
+
+    <span class="cmt">// Log lúc khởi động chưa thuộc request nào -&gt; không có id, vẫn in bình thường.</span>
+    <span class="kw">return</span> requestId ? <span class="str">`[</span>${requestId.<span class="fn">slice</span>(<span class="num">0</span>, <span class="num">8</span>)}<span class="str">] </span>${<span class="fn">String</span>(message)}<span class="str">`</span> : <span class="fn">String</span>(message);
+  }
+
+  <span class="fn">log</span>(message: <span class="kw">unknown</span>, ...rest: <span class="kw">unknown</span>[]) {
+    <span class="kw">super</span>.<span class="fn">log</span>(<span class="kw">this</span>.<span class="fn">tag</span>(message), ...(rest <span class="kw">as</span> <span class="kw">string</span>[]));
+  }
+
+  <span class="fn">error</span>(message: <span class="kw">unknown</span>, ...rest: <span class="kw">unknown</span>[]) {
+    <span class="kw">super</span>.<span class="fn">error</span>(<span class="kw">this</span>.<span class="fn">tag</span>(message), ...(rest <span class="kw">as</span> <span class="kw">string</span>[]));
+  }
+
+  <span class="fn">warn</span>(message: <span class="kw">unknown</span>, ...rest: <span class="kw">unknown</span>[]) {
+    <span class="kw">super</span>.<span class="fn">warn</span>(<span class="kw">this</span>.<span class="fn">tag</span>(message), ...(rest <span class="kw">as</span> <span class="kw">string</span>[]));
+  }
+}</code></pre>
+  </div>
+
+  <h2>6. Nối tất cả lại</h2>
+
+  <p>Đăng ký middleware cho mọi route trong <code>app.module.ts</code>:</p>
+
+  <div class="code-block">
+    <span class="code-label">elearning-api/src/app.module.ts</span>
+<pre><code><span class="kw">import</span> { MiddlewareConsumer, Module, NestModule } <span class="kw">from</span> <span class="str">'@nestjs/common'</span>;   <span class="cmt">// ← SỬA</span>
+<span class="kw">import</span> { RequestIdMiddleware } <span class="kw">from</span> <span class="str">'./common/middleware/request-id.middleware'</span>;  <span class="cmt">// ← THÊM</span>
+
+<span class="cmt">// ... phần @Module({...}) giữ nguyên ...</span>
+
+<span class="kw">export class</span> AppModule <span class="kw">implements</span> NestModule {          <span class="cmt">// ← SỬA</span>
+  <span class="fn">configure</span>(consumer: MiddlewareConsumer) {
+    <span class="cmt">// '*' = áp cho MỌI route, kể cả route thêm sau này.</span>
+    consumer.<span class="fn">apply</span>(RequestIdMiddleware).<span class="fn">forRoutes</span>(<span class="str">'*'</span>);
+  }
+}</code></pre>
+  </div>
+
+  <p>Bật logger trong <code>main.ts</code>:</p>
+
+  <div class="code-block">
+    <span class="code-label">elearning-api/src/main.ts</span>
+<pre><code><span class="kw">import</span> { AppLogger } <span class="kw">from</span> <span class="str">'./common/app-logger.service'</span>;   <span class="cmt">// ← THÊM</span>
+
+<span class="cmt">// bufferLogs: giữ log khởi động lại, in ra bằng logger mới thay vì logger mặc định</span>
+<span class="kw">const</span> app = <span class="kw">await</span> NestFactory.<span class="fn">create</span>(AppModule, { bufferLogs: <span class="kw">true</span> });
+app.<span class="fn">useLogger</span>(<span class="kw">new</span> <span class="fn">AppLogger</span>());</code></pre>
+  </div>
+
+  <p>Và cho <code>requestId</code> vào body lỗi của Bài 07 — <strong>đây là mảnh ghép cuối</strong>:</p>
+
+  <div class="code-block">
+    <span class="code-label">elearning-api/src/common/filters/all-exceptions.filter.ts — 3 chỗ sửa</span>
+<pre><code><span class="kw">import</span> { getRequestId } <span class="kw">from</span> <span class="str">'../request-context'</span>;   <span class="cmt">// ← THÊM</span>
+
+<span class="kw">interface</span> ErrorBody {
+  <span class="cmt">// ... các trường cũ ...</span>
+  requestId?: <span class="kw">string</span>;                                <span class="cmt">// ← THÊM</span>
+}
+
+<span class="cmt">// ... trong hàm catch(), khi dựng body:</span>
+<span class="kw">const</span> body: ErrorBody = {
+  statusCode,
+  error,
+  messages,
+  path: request.url,
+  timestamp: <span class="kw">new</span> <span class="fn">Date</span>().<span class="fn">toISOString</span>(),
+  requestId: <span class="fn">getRequestId</span>(),                          <span class="cmt">// ← THÊM</span>
+};</code></pre>
+  </div>
+
+  <h2>7. Chạy và kiểm 4 điều</h2>
+
+  <div class="code-block">
+    <span class="code-label">bash — 1) header có được trả về không?</span>
+<pre><code>curl -si http://localhost:3333/courses | <span class="fn">grep</span> -i x-request-id</code></pre>
+  </div>
+
+  <div class="code-block">
+    <span class="code-label">THẬT</span>
+<pre><code>x-request-id: bbdd1a30-cdfa-41ea-9d48-1f951db8b67c</code></pre>
+  </div>
+
+  <div class="code-block">
+    <span class="code-label">bash — 2) hai request có hai id khác nhau?</span>
+<pre><code><span class="kw">for</span> i <span class="kw">in</span> 1 2; <span class="kw">do</span> curl -s -D- -o /dev/null http://localhost:3333/courses | <span class="fn">grep</span> -i <span class="str">'^x-request-id'</span>; <span class="kw">done</span></code></pre>
+  </div>
+
+  <div class="code-block">
+    <span class="code-label">THẬT</span>
+<pre><code>x-request-id: 088e5cb2-61f8-4d41-a5ef-a8c02b0c4d5e
+x-request-id: dbaa89c4-810e-4817-8f23-d1629861c27f</code></pre>
+  </div>
+
+  <div class="code-block">
+    <span class="code-label">bash — 3) client tự gửi id thì server có tôn trọng?</span>
+<pre><code>curl -s -D- -o /dev/null -H <span class="str">'x-request-id: tuan-tu-dat-id-123'</span> \
+  http://localhost:3333/courses | <span class="fn">grep</span> -i <span class="str">'^x-request-id'</span></code></pre>
+  </div>
+
+  <div class="code-block">
+    <span class="code-label">THẬT</span>
+<pre><code>x-request-id: tuan-tu-dat-id-123</code></pre>
+  </div>
+
+  <div class="code-block">
+    <span class="code-label">bash — 4) lỗi có kèm id để đi tra log?</span>
+<pre><code>curl -s -H <span class="str">'x-request-id: theo-dau-vet-abc'</span> http://localhost:3333/courses/99</code></pre>
+  </div>
+
+  <div class="code-block">
+    <span class="code-label">THẬT</span>
+<pre><code>{<span class="str">"statusCode"</span>:<span class="num">404</span>,<span class="str">"error"</span>:<span class="str">"Not Found"</span>,
+ <span class="str">"messages"</span>:[<span class="str">"Course with id=99 not found"</span>],
+ <span class="str">"path"</span>:<span class="str">"/courses/99"</span>,
+ <span class="str">"timestamp"</span>:<span class="str">"2026-08-26T16:18:05.434Z"</span>,
+ <span class="str">"requestId"</span>:<span class="str">"theo-dau-vet-abc"</span>}</code></pre>
+  </div>
+
+  <p>Và log server, khi có lỗi <code>500</code>:</p>
+
+  <div class="code-block">
+    <span class="code-label">log server — THẬT</span>
+<pre><code>ERROR [AllExceptionsFilter] [457f82f2] GET /courses/boom
+Error: ...</code></pre>
+  </div>
+
+  <div class="callout why">
+    <div class="ct">💡 Vòng tròn khép lại — đây là thứ bài này thật sự mua cho bạn</div>
+    <p>
+      Khách gọi điện báo lỗi. Bạn hỏi <em>"anh/chị đọc giúp tôi mã lỗi trên màn hình"</em> — frontend
+      hiển thị <code>requestId</code> lấy từ body lỗi. Họ đọc <code>457f82f2</code>. Bạn gõ:
+    </p>
+    <div class="code-block" style="margin-top:8px">
+      <span class="code-label">bash</span>
+<pre><code><span class="fn">grep</span> <span class="str">"457f82f2"</span> app.log</code></pre>
+    </div>
+    <p style="margin-top:10px; margin-bottom:0">
+      Và ra <strong>đúng hành trình của người đó</strong>, tách khỏi hàng nghìn dòng của người khác.
+      <em>45 phút mò kim đáy bể rút xuống 5 giây.</em> Đây là khác biệt rất cụ thể giữa người từng vận
+      hành hệ thống thật và người mới chỉ viết code chạy được — và là thứ khách freelance cảm nhận rõ nhất.
+    </p>
+  </div>
+
+  <div class="callout warn">
+    <div class="ct">⚠️ Bước tiếp theo mà bài này CỐ Ý chưa làm</div>
+    <p style="margin-bottom:0">
+      Log hiện vẫn là <em>văn bản cho người đọc</em>. Hệ thống thật thường log ra <strong>JSON một dòng</strong>
+      (<code>{"level":"error","requestId":"...","msg":"..."}</code>) để máy lọc/gom được — thư viện phổ
+      biến là <code>pino</code>. Tôi chưa đưa vào vì nó thêm một dependency và một tầng khái niệm, trong
+      khi <em>thứ đắt giá nhất là request-id thì bạn đã có rồi</em>. Khi nào dự án cần gửi log lên dịch
+      vụ tập trung, ta thay <code>ConsoleLogger</code> bằng <code>pino</code> — phần
+      <code>AsyncLocalStorage</code> giữ nguyên không đổi một dòng.
+    </p>
+  </div>
+
+  <div class="quiz">
+    <h3>🧠 Kiểm tra nhanh (bấm để có phản hồi ngay)</h3>
+
+    <div class="q">Câu 1. Vì sao không truyền thẳng <code>requestId</code> làm tham số cho các hàm service?</div>
+    <button class="opt" data-correct="false" data-explain="Hiệu năng không đáng kể — truyền thêm một tham số chuỗi gần như miễn phí. Vấn đề nằm ở thiết kế, không phải tốc độ.">A. Vì truyền tham số làm chậm ứng dụng</button>
+    <button class="opt" data-correct="true" data-explain="Đúng. Nó lây lan: một hàm ở tầng sâu cần id thì CẢ chuỗi gọi phía trên đều phải nhận id chỉ để chuyển tiếp. Nghiệp vụ bị nhiễm bẩn bởi thứ chẳng liên quan gì tới nghiệp vụ — đúng cái ranh giới 'service không biết gì về HTTP' bạn dựng từ Bài 05.">B. Vì nó lây lan khắp chuỗi gọi, làm bẩn chữ ký của những hàm không liên quan gì tới HTTP</button>
+    <button class="opt" data-correct="false" data-explain="Hoàn toàn làm được, và nhiều codebase làm vậy thật. Nó chạy đúng — chỉ là xấu và khó bảo trì, nên có AsyncLocalStorage để tránh.">C. Vì TypeScript không cho truyền thêm tham số tuỳ chọn</button>
+    <div class="feedback"></div>
+
+    <div class="q">Câu 2. Điều gì làm <code>AsyncLocalStorage</code> giữ được ngữ cảnh <em>qua</em> <code>await</code>?</div>
+    <button class="opt" data-correct="false" data-explain="Không phải biến toàn cục. Biến toàn cục sẽ bị request khác ghi đè ngay — đúng cái bẫy 'một tiến trình phục vụ mọi người' ở Bài 01. AsyncLocalStorage cho mỗi chuỗi thực thi một kho riêng.">A. Nó lưu vào một biến toàn cục</button>
+    <button class="opt" data-correct="true" data-explain="Đúng, và đây là chỗ Bài 03 trả cổ tức. Node phải theo dõi chuỗi thực thi bất đồng bộ để biết 'quay lại chỗ nào của ai' sau mỗi await — async_hooks phơi chính cơ chế đó ra. AsyncLocalStorage bám vào đấy, nên ngữ cảnh sống sót qua await mà không đụng tới biến toàn cục.">B. Nó bám vào cơ chế theo dõi chuỗi thực thi bất đồng bộ của Node (<code>async_hooks</code>)</button>
+    <button class="opt" data-correct="false" data-explain="Không có chuyện đó. Node vẫn là một luồng chạy JavaScript như Bài 03 đã đo — AsyncLocalStorage không tạo luồng nào cả.">C. Nó tạo một luồng riêng cho mỗi request</button>
+    <div class="feedback"></div>
+
+    <div class="q">Câu 3. Vì sao middleware phải <em>tôn trọng</em> <code>x-request-id</code> nếu client đã gửi lên?</div>
+    <button class="opt" data-correct="false" data-explain="Sinh id mới rất rẻ (randomUUID gần như miễn phí). Lý do hoàn toàn không phải tiết kiệm.">A. Để tiết kiệm chi phí sinh UUID</button>
+    <button class="opt" data-correct="true" data-explain="Đúng. Request thật đi qua nhiều chặng: trình duyệt → CDN → gateway → API của bạn → dịch vụ khác. Mỗi chặng tự sinh id riêng thì không nối lại được. Quy ước: ai đã gắn thì giữ, chưa ai gắn thì mình là người đầu tiên. Đây là nền của distributed tracing.">B. Để một id duy nhất xâu chuỗi được request qua nhiều hệ thống</button>
+    <button class="opt" data-correct="false" data-explain="Không có chuẩn HTTP nào quy định x-request-id — tiền tố 'x-' vốn là dấu hiệu header phi tiêu chuẩn. Đây là quy ước ngành, được dùng rộng rãi vì hữu ích, không phải vì bắt buộc.">C. Vì chuẩn HTTP bắt buộc phải giữ nguyên header <code>x-request-id</code></button>
+    <div class="feedback"></div>
+
+    <div class="q">Câu 4. Vì sao <code>requestId</code> nên xuất hiện trong <em>body lỗi</em> trả về client, chứ không chỉ trong log?</div>
+    <button class="opt" data-correct="false" data-explain="Không có gì nhạy cảm ở đây — nó là chuỗi ngẫu nhiên, không tiết lộ gì về hệ thống. Khác hẳn stack trace ở Bài 07, thứ thật sự phải giấu.">A. Không nên — lộ id ra ngoài là rủi ro bảo mật</button>
+    <button class="opt" data-correct="true" data-explain="Đúng, và đây là mục đích cuối của cả bài. Khách đọc mã trên màn hình, bạn grep đúng một phát ra hành trình của họ giữa hàng nghìn dòng. Không có id thì phải hỏi 'lúc mấy giờ, làm gì' rồi mò — 45 phút thay vì 5 giây.">B. Để khách báo lỗi đọc được mã đó, và bạn <code>grep</code> ra đúng hành trình của họ</button>
+    <button class="opt" data-correct="false" data-explain="Frontend không cần id để hiển thị lỗi — messages đã đủ. Giá trị của nó nằm ở lúc đi TRUY VẾT, không phải lúc hiển thị.">C. Để frontend biết cách hiển thị lỗi cho đúng</button>
+    <div class="feedback"></div>
+
+    <div class="q">Câu 5. Trong <code>AppLogger</code>, khi log lúc khởi động (chưa có request nào) thì <code>getRequestId()</code> trả gì, và ta xử lý sao?</div>
+    <button class="opt" data-correct="false" data-explain="Không ném lỗi. getStore() trả về undefined một cách bình thường khi gọi ngoài mọi ngữ cảnh — đó là hành vi thiết kế, không phải lỗi.">A. Ném lỗi vì chưa có ngữ cảnh — phải bọc <code>try/catch</code></button>
+    <button class="opt" data-correct="true" data-explain="Đúng. Log khởi động (bảng route, 'Nest application successfully started') không thuộc request nào cả, nên getStore() trả undefined và ta in nguyên văn không dán thẻ. Đây là thói quen tốt: mọi thứ phụ thuộc ngữ cảnh đều phải xử lý được trường hợp KHÔNG có ngữ cảnh — cùng tinh thần với 'tham số query không có thì trả null' ở Bài 02.">B. Trả <code>undefined</code> — ta in nguyên văn, không dán thẻ</button>
+    <button class="opt" data-correct="false" data-explain="Không có id mặc định nào cả, và cũng không nên bịa ra: một id giả sẽ gom nhầm mọi dòng log khởi động vào chung 'một request' không hề tồn tại, gây hiểu lầm khi truy vết.">C. Trả chuỗi rỗng, và ta dán thẻ <code>[]</code> rỗng</button>
+    <div class="feedback"></div>
+  </div>
+
+  <div class="callout tip">
+    <div class="ct">✅ Dự án của bạn vừa lớn thêm</div>
+    <ul class="checklist">
+      <li>Mỗi request có <code>x-request-id</code> riêng, trả về trong header</li>
+      <li>Id đi theo suốt vòng đời request qua <code>AsyncLocalStorage</code> — không sửa chữ ký hàm nào</li>
+      <li>Id tự dán vào mọi dòng log, và nằm trong body lỗi để khách đọc được</li>
+      <li>Tôn trọng id từ hệ thống phía trước — sẵn sàng cho tracing nhiều tầng</li>
+      <li>Hiểu vì sao <code>AsyncLocalStorage</code> làm được điều đó (nối thẳng về Bài 03)</li>
+    </ul>
+  </div>
+
+  <h2>8. Câu hỏi tư duy (bắc cầu sang Module 3)</h2>
+
+  <p>
+    Module 2 khép lại ở đây. Nhìn lại <code>CoursesService</code>: dữ liệu vẫn là một mảng cứng trong
+    bộ nhớ. Điều đó nghĩa là <strong>mỗi lần bạn khởi động lại server, mọi khoá học tạo bằng
+    <code>POST</code> đều bốc hơi</strong>.
+  </p>
+  <p>
+    Trước khi ta thay nó bằng Postgres ở Module 3, hãy thử tự trả lời: một khoá học có
+    <em>nhiều bài học</em>, một học viên <em>mua nhiều khoá</em>, một khoá <em>có nhiều học viên</em>.
+    <strong>Bạn sẽ vẽ những bảng nào, và cái "một học viên mua nhiều khoá, một khoá có nhiều học viên"
+    thì để ở đâu?</strong>
+  </p>
+  <p>
+    Câu khó hơn, và nó quyết định cả kiến trúc: khi học viên mua khoá học, <em>giá tiền</em> lưu ở đâu?
+    Lưu trong bảng khoá học thì hôm sau bạn giảm giá — <strong>hoá đơn cũ có tự đổi theo không?</strong>
+  </p>
+
+  <div class="next-box">
+    <div class="nl">→ Module tiếp theo</div>
+    <div class="nt">Module 3 · Dữ liệu &amp; Postgres — nơi junior và senior khác nhau rõ nhất</div>
+    <p class="nd">Thiết kế schema e-learning, quan hệ, index, Prisma 7, và cái bẫy N+1. Ai cũng viết được CRUD; ít người biết vì sao trang 10.000 chậm.</p>
+  </div>
+
+  <div class="navbar">
+    <a href="0008-config-12-factor.html">← Trước</a>
+    <a href="index.html">🏠 Mục lục</a>
+    <a class="disabled">Sau →</a>
+  </div>
+
+  <p class="try-it">
+    💬 <strong>Chạy tới đâu thấy lạ thì hỏi ngay.</strong> Kiểm đủ 4 điều ở phần 7 là bài này xong —
+    nhất là điều số 3 (client tự gửi id thì server giữ nguyên).
+  </p>
+
+</div>
+<script src="lesson-enhance.js"></script>
+</body>
+</html>
