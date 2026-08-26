@@ -49,7 +49,7 @@
 
   <div class="code-block">
     <span class="code-label">bash — chạy thẳng, không cần file</span>
-<pre><code>node -e <span class="str">"console.log('/courses?level=co-ban' === '/courses')"</span></code></pre>
+<pre><code>node -e <span class="str">"console.log('/courses?level=beginner' === '/courses')"</span></code></pre>
   </div>
 
   <div class="code-block">
@@ -81,20 +81,20 @@
   <div class="code-block">
     <span class="code-label">bash — thử ngay</span>
 <pre><code>node -e <span class="str">"
-const url = new URL('/courses?level=co-ban&page=2', 'http://localhost:3337');
-console.log('pathname     :', url.pathname);
-console.log('level        :', url.searchParams.get('level'));
-console.log('page         :', url.searchParams.get('page'));
-console.log('tham so thieu:', url.searchParams.get('khong-co'));
+const url = new URL('/courses?level=beginner&page=2', 'http://localhost:3337');
+console.log('pathname      :', url.pathname);
+console.log('level         :', url.searchParams.get('level'));
+console.log('page          :', url.searchParams.get('page'));
+console.log('missing param :', url.searchParams.get('nope'));
 "</span></code></pre>
   </div>
 
   <div class="code-block">
     <span class="code-label">kết quả THẬT (đã verify)</span>
-<pre><code>pathname     : /courses
-level        : co-ban
-page         : <span class="num">2</span>
-tham so thieu: <span class="kw">null</span></code></pre>
+<pre><code>pathname      : /courses
+level         : beginner
+page          : <span class="num">2</span>
+missing param : <span class="kw">null</span></code></pre>
   </div>
 
   <div class="callout tip">
@@ -123,7 +123,7 @@ tham so thieu: <span class="kw">null</span></code></pre>
 
 <span class="cmt">// Handler là async vì phần đọc body ở dưới cần `await`.</span>
 <span class="kw">const</span> server = <span class="fn">createServer</span>(<span class="kw">async</span> (request, response) => {
-  <span class="cmt">// request.url là CHUỖI THÔ, dính cả query string ('/courses?level=co-ban').</span>
+  <span class="cmt">// request.url là CHUỖI THÔ, dính cả query string ('/courses?level=beginner').</span>
   <span class="cmt">// new URL() tách nó ra thành pathname + searchParams cho ta.</span>
   <span class="cmt">// Tham số thứ 2 là "gốc" bắt buộc, vì request.url không có domain.</span>
   <span class="kw">const</span> url = <span class="kw">new</span> <span class="fn">URL</span>(request.url, <span class="str">`http://</span>${request.headers.host}<span class="str">`</span>);
@@ -140,8 +140,8 @@ tham so thieu: <span class="kw">null</span></code></pre>
 
   <span class="cmt">// ── Route 2: GET /courses?level=... ────────────────────</span>
   <span class="kw">if</span> (method === <span class="str">'GET'</span> &amp;&amp; pathname === <span class="str">'/courses'</span>) {
-    <span class="cmt">// ?? 'tat-ca' = giá trị mặc định khi client không gửi tham số.</span>
-    <span class="kw">const</span> level = url.searchParams.<span class="fn">get</span>(<span class="str">'level'</span>) ?? <span class="str">'tat-ca'</span>;
+    <span class="cmt">// ?? 'all' = giá trị mặc định khi client không gửi tham số.</span>
+    <span class="kw">const</span> level = url.searchParams.<span class="fn">get</span>(<span class="str">'level'</span>) ?? <span class="str">'all'</span>;
     response.<span class="fn">writeHead</span>(<span class="num">200</span>, { <span class="str">'Content-Type'</span>: <span class="str">'application/json; charset=utf-8'</span> });
     <span class="kw">return</span> response.<span class="fn">end</span>(<span class="fn">JSON.stringify</span>({ level, items: [] }));
   }
@@ -160,12 +160,12 @@ tham so thieu: <span class="kw">null</span></code></pre>
     } <span class="kw">catch</span> {
       <span class="cmt">// Client gửi rác → lỗi của CLIENT → 400, không phải 500.</span>
       response.<span class="fn">writeHead</span>(<span class="num">400</span>, { <span class="str">'Content-Type'</span>: <span class="str">'application/json; charset=utf-8'</span> });
-      <span class="kw">return</span> response.<span class="fn">end</span>(<span class="fn">JSON.stringify</span>({ error: <span class="str">'Body không phải JSON hợp lệ'</span> }));
+      <span class="kw">return</span> response.<span class="fn">end</span>(<span class="fn">JSON.stringify</span>({ error: <span class="str">'Invalid JSON body'</span> }));
     }
 
     <span class="kw">if</span> (!data.title) {
       response.<span class="fn">writeHead</span>(<span class="num">400</span>, { <span class="str">'Content-Type'</span>: <span class="str">'application/json; charset=utf-8'</span> });
-      <span class="kw">return</span> response.<span class="fn">end</span>(<span class="fn">JSON.stringify</span>({ error: <span class="str">'Thiếu trường title'</span> }));
+      <span class="kw">return</span> response.<span class="fn">end</span>(<span class="fn">JSON.stringify</span>({ error: <span class="str">'Missing field: title'</span> }));
     }
 
     <span class="cmt">// 201 = "đã tạo ra tài nguyên mới". Location chỉ tới nơi nó vừa sinh ra.</span>
@@ -185,17 +185,17 @@ tham so thieu: <span class="kw">null</span></code></pre>
       <span class="cmt">// RFC BẮT BUỘC có header Allow trong response 405.</span>
       Allow: <span class="str">'GET, POST'</span>,
     });
-    <span class="kw">return</span> response.<span class="fn">end</span>(<span class="fn">JSON.stringify</span>({ error: <span class="str">`Method </span>${method}<span class="str"> không dùng được ở đây`</span> }));
+    <span class="kw">return</span> response.<span class="fn">end</span>(<span class="fn">JSON.stringify</span>({ error: <span class="str">`Method </span>${method}<span class="str"> not allowed here`</span> }));
   }
 
   <span class="cmt">// ── Không khớp gì cả → 404 ─────────────────────────────</span>
   <span class="cmt">// Nhánh này là "lưới an toàn": mọi request lọt tới đây đều CÓ response.</span>
   response.<span class="fn">writeHead</span>(<span class="num">404</span>, { <span class="str">'Content-Type'</span>: <span class="str">'application/json; charset=utf-8'</span> });
-  response.<span class="fn">end</span>(<span class="fn">JSON.stringify</span>({ error: <span class="str">'Không tìm thấy'</span> }));
+  response.<span class="fn">end</span>(<span class="fn">JSON.stringify</span>({ error: <span class="str">'Not found'</span> }));
 });
 
 server.<span class="fn">listen</span>(<span class="num">3337</span>, () => {
-  console.<span class="fn">log</span>(<span class="str">'Server dang nghe tai http://localhost:3337'</span>);
+  console.<span class="fn">log</span>(<span class="str">'Server listening on http://localhost:3337'</span>);
 });</code></pre>
   </div>
 
@@ -238,24 +238,24 @@ node lab/02-request-response.mjs</code></pre>
 <pre><code><span class="kw">import</span> { createServer } <span class="kw">from</span> <span class="str">'node:http'</span>;
 
 <span class="kw">const</span> server = <span class="fn">createServer</span>(<span class="kw">async</span> (request, response) => {
-  <span class="kw">let</span> soKhuc = <span class="num">0</span>;
-  <span class="kw">let</span> tongByte = <span class="num">0</span>;
+  <span class="kw">let</span> chunkCount = <span class="num">0</span>;
+  <span class="kw">let</span> totalBytes = <span class="num">0</span>;
 
   <span class="cmt">// `request` LÀ một stream đọc được. Vòng lặp này chạy MỖI KHI một khúc dữ liệu</span>
   <span class="cmt">// vừa tới nơi qua dây mạng — không phải chạy một lần trên toàn bộ body.</span>
-  <span class="kw">for await</span> (<span class="kw">const</span> khuc <span class="kw">of</span> request) {
-    soKhuc++;
-    tongByte += khuc.length;
+  <span class="kw">for await</span> (<span class="kw">const</span> chunk <span class="kw">of</span> request) {
+    chunkCount++;
+    totalBytes += chunk.length;
   }
 
-  console.<span class="fn">log</span>(<span class="str">`Nhan </span>${soKhuc}<span class="str"> khuc, tong </span>${tongByte}<span class="str"> byte`</span>);
+  console.<span class="fn">log</span>(<span class="str">`Received </span>${chunkCount}<span class="str"> chunks, </span>${totalBytes}<span class="str"> bytes total`</span>);
 
   response.<span class="fn">writeHead</span>(<span class="num">200</span>, { <span class="str">'Content-Type'</span>: <span class="str">'text/plain; charset=utf-8'</span> });
-  response.<span class="fn">end</span>(<span class="str">`khuc=</span>${soKhuc}<span class="str"> byte=</span>${tongByte}<span class="str">\n`</span>);
+  response.<span class="fn">end</span>(<span class="str">`chunks=</span>${chunkCount}<span class="str"> bytes=</span>${totalBytes}<span class="str">\n`</span>);
 });
 
 server.<span class="fn">listen</span>(<span class="num">3338</span>, () => {
-  console.<span class="fn">log</span>(<span class="str">'Server dem khuc dang nghe tai http://localhost:3338'</span>);
+  console.<span class="fn">log</span>(<span class="str">'Chunk counter listening on http://localhost:3338'</span>);
 });</code></pre>
   </div>
 
@@ -268,8 +268,8 @@ server.<span class="fn">listen</span>(<span class="num">3338</span>, () => {
 
   <div class="code-block">
     <span class="code-label">bash — tab 3</span>
-<pre><code><span class="cmt"># 1) body tí xíu (8 byte)</span>
-curl -s -X POST http://localhost:3338 -d <span class="str">'xin chao'</span>
+<pre><code><span class="cmt"># 1) body tí xíu (5 byte)</span>
+curl -s -X POST http://localhost:3338 -d <span class="str">'hello'</span>
 
 <span class="cmt"># 2) body 5MB — node sinh ra 5 triệu chữ 'x' rồi ống qua curl</span>
 <span class="cmt">#    --data-binary @- nghĩa là "lấy body từ đầu vào chuẩn, đừng sửa gì cả"</span>
@@ -281,16 +281,16 @@ curl -s http://localhost:3338</code></pre>
 
   <div class="code-block">
     <span class="code-label">output THẬT (đã verify, Node v22.18.0)</span>
-<pre><code>khuc=<span class="num">1</span> byte=<span class="num">8</span>
-khuc=<span class="num">83</span> byte=<span class="num">5242880</span>
-khuc=<span class="num">0</span> byte=<span class="num">0</span></code></pre>
+<pre><code>chunks=<span class="num">1</span> bytes=<span class="num">5</span>
+chunks=<span class="num">82</span> bytes=<span class="num">5242880</span>
+chunks=<span class="num">0</span> bytes=<span class="num">0</span></code></pre>
   </div>
 
   <div class="callout why">
     <div class="ct">💡 Ba con số này nói gì</div>
     <ul style="margin-bottom:0">
-      <li><strong>8 byte → 1 khúc.</strong> Nhỏ thì tới một phát, nên bạn dễ tưởng body luôn "có sẵn".</li>
-      <li><strong>5MB → 83 khúc.</strong> Vòng lặp chạy 83 lần. Nếu bạn chạy lại có thể ra 82 hay 84 —
+      <li><strong>5 byte → 1 khúc.</strong> Nhỏ thì tới một phát, nên bạn dễ tưởng body luôn "có sẵn".</li>
+      <li><strong>5MB → 82 khúc.</strong> Vòng lặp chạy 82 lần. Nếu bạn chạy lại có thể ra 81 hay 83 —
         <em>và đó mới là điểm đáng nhớ nhất</em>: số khúc phụ thuộc mạng và bộ đệm hệ điều hành, không
         phải thứ bạn kiểm soát. <strong>Đừng bao giờ viết code giả định "chắc nó về một lần".</strong></li>
       <li><strong>GET → 0 khúc.</strong> Vòng lặp không chạy lần nào và cũng không treo — stream kết thúc ngay.</li>
@@ -324,8 +324,8 @@ khuc=<span class="num">0</span> byte=<span class="num">0</span></code></pre>
 
 <span class="kw">const</span> server = <span class="fn">createServer</span>(<span class="kw">async</span> (request, response) => {
   <span class="kw">let</span> raw = <span class="str">''</span>;
-  <span class="kw">for await</span> (<span class="kw">const</span> khuc <span class="kw">of</span> request) {
-    raw += khuc;
+  <span class="kw">for await</span> (<span class="kw">const</span> chunk <span class="kw">of</span> request) {
+    raw += chunk;
   }
 
   <span class="cmt">// CỐ Ý KHÔNG try/catch — để thấy hậu quả thật.</span>
@@ -336,7 +336,7 @@ khuc=<span class="num">0</span> byte=<span class="num">0</span></code></pre>
 });
 
 server.<span class="fn">listen</span>(<span class="num">3338</span>, () => {
-  console.<span class="fn">log</span>(<span class="str">'Server dang nghe tai http://localhost:3338'</span>);
+  console.<span class="fn">log</span>(<span class="str">'Server listening on http://localhost:3338'</span>);
 });</code></pre>
   </div>
 
@@ -348,7 +348,7 @@ server.<span class="fn">listen</span>(<span class="num">3338</span>, () => {
 curl -s --max-time <span class="num">3</span> -X POST http://localhost:3338 -d <span class="str">'{"a":1}'</span>; <span class="fn">echo</span> <span class="str">" exit=</span>$?<span class="str">"</span>
 
 <span class="cmt"># Lần 2: một client gửi rác</span>
-curl -s --max-time <span class="num">3</span> -X POST http://localhost:3338 -d <span class="str">'hong'</span>; <span class="fn">echo</span> <span class="str">"exit=</span>$?<span class="str">"</span>
+curl -s --max-time <span class="num">3</span> -X POST http://localhost:3338 -d <span class="str">'bad'</span>; <span class="fn">echo</span> <span class="str">"exit=</span>$?<span class="str">"</span>
 
 <span class="cmt"># Lần 3: một client KHÁC, gửi đúng chuẩn, hoàn toàn vô tội</span>
 curl -s --max-time <span class="num">3</span> -X POST http://localhost:3338 -d <span class="str">'{"a":1}'</span>; <span class="fn">echo</span> <span class="str">"exit=</span>$?<span class="str">"</span></code></pre>
@@ -363,9 +363,9 @@ exit=<span class="num">7</span>           <span class="cmt"># lần 3: 7 = Conne
 
   <div class="code-block">
     <span class="code-label">tab 2 — terminal chạy server (đã verify)</span>
-<pre><code>SyntaxError: Unexpected token <span class="str">'h'</span>, <span class="str">"hong"</span> is not valid JSON
+<pre><code>SyntaxError: Unexpected token <span class="str">'b'</span>, <span class="str">"bad"</span> is not valid JSON
     at JSON.<span class="fn">parse</span> (&lt;anonymous&gt;)
-    at Server.&lt;anonymous&gt; (file:///.../lab/02-body-stream.mjs:<span class="num">10</span>:<span class="num">21</span>)
+    at Server.&lt;anonymous&gt; (file:///.../lab/02-body-stream.mjs:<span class="num">8</span>:<span class="num">21</span>)
 
 Node.js v22.<span class="num">18</span>.<span class="num">0</span></code></pre>
   </div>
@@ -373,7 +373,7 @@ Node.js v22.<span class="num">18</span>.<span class="num">0</span></code></pre>
   <div class="callout danger">
     <div class="ct">🚨 Đọc kỹ chỗ này — đây là bài học đắt nhất của cả bài</div>
     <p>
-      Một người lạ gõ 4 ký tự rác, và <strong>toàn bộ tiến trình server thoát</strong>. Không chỉ request
+      Một người lạ gõ 3 ký tự rác, và <strong>toàn bộ tiến trình server thoát</strong>. Không chỉ request
       đó hỏng — <em>mọi user đang online đều mất kết nối</em>. Lần gọi thứ 3 nhận
       <code>exit=7</code> (connection refused): không còn tiến trình nào lắng nghe nữa.
     </p>
@@ -409,11 +409,11 @@ Node.js v22.<span class="num">18</span>.<span class="num">0</span></code></pre>
   <div class="code-block">
     <span class="code-label">bash — tab 3 · <code>-i</code> in cả header của response</span>
 <pre><code>curl -si http://localhost:3337/ping
-curl -si <span class="str">"http://localhost:3337/courses?level=co-ban"</span>
-curl -si -X POST http://localhost:3337/courses -d <span class="str">'{"title":"NestJS tu goc"}'</span>
-curl -si -X POST http://localhost:3337/courses -d <span class="str">'khong-phai-json'</span>
+curl -si <span class="str">"http://localhost:3337/courses?level=beginner"</span>
+curl -si -X POST http://localhost:3337/courses -d <span class="str">'{"title":"NestJS Fundamentals"}'</span>
+curl -si -X POST http://localhost:3337/courses -d <span class="str">'not-json'</span>
 curl -si -X DELETE http://localhost:3337/courses
-curl -si http://localhost:3337/khong-ton-tai</code></pre>
+curl -si http://localhost:3337/does-not-exist</code></pre>
   </div>
 
   <p>Kết quả thật (tôi đã chạy đủ 6 ca trước khi giao bài):</p>
@@ -422,11 +422,11 @@ curl -si http://localhost:3337/khong-ton-tai</code></pre>
     <thead><tr><th>Bạn gọi</th><th>Trả về</th><th>Vì sao mã đó chứ không phải mã khác</th></tr></thead>
     <tbody>
       <tr><td><code>GET /ping</code></td><td><code>200 OK</code></td><td>Có thứ để trả, và trả được.</td></tr>
-      <tr><td><code>GET /courses?level=co-ban</code></td><td><code>200 OK</code></td><td>Danh sách rỗng <strong>vẫn là 200</strong> — "không có kết quả" khác "không tìm thấy tài nguyên".</td></tr>
+      <tr><td><code>GET /courses?level=beginner</code></td><td><code>200 OK</code></td><td>Danh sách rỗng <strong>vẫn là 200</strong> — "không có kết quả" khác "không tìm thấy tài nguyên".</td></tr>
       <tr><td><code>POST /courses</code> (hợp lệ)</td><td><code>201 Created</code><br>+ <code>Location: /courses/1</code></td><td>Đã <em>sinh ra</em> một tài nguyên mới. RFC 9110 §15.3.2: <code>Location</code> chính là thứ chỉ ra tài nguyên vừa tạo.</td></tr>
       <tr><td><code>POST /courses</code> (rác)</td><td><code>400 Bad Request</code></td><td><span class="nullcell">Lỗi của CLIENT</span>, không phải của bạn. Trả 500 ở đây là tự nhận tội hộ người khác — và làm hỏng biểu đồ cảnh báo lúc 2h sáng.</td></tr>
       <tr><td><code>DELETE /courses</code></td><td><code>405 Method Not Allowed</code><br>+ <code>Allow: GET, POST</code></td><td>Đường dẫn <em>có tồn tại</em>, chỉ là không nhận method này. Trả 404 ở đây là nói dối.</td></tr>
-      <tr><td><code>GET /khong-ton-tai</code></td><td><code>404 Not Found</code></td><td>Không có tài nguyên nào ở đường dẫn đó, với bất kỳ method nào.</td></tr>
+      <tr><td><code>GET /does-not-exist</code></td><td><code>404 Not Found</code></td><td>Không có tài nguyên nào ở đường dẫn đó, với bất kỳ method nào.</td></tr>
     </tbody>
   </table>
 
@@ -497,7 +497,7 @@ curl -si http://localhost:3337/khong-ton-tai</code></pre>
     <button class="opt" data-correct="false" data-explain="Không có cấu hình nào bật lên được cả — node:http cố ý dừng ở mức giao thức. Thứ 'bật lên được' mà bạn đang nghĩ tới chính là body parser của Express/Nest, và nó chỉ là vòng lặp gom khúc bạn vừa tự viết ở phần 3.">C. Vì cần bật một tuỳ chọn cấu hình trong <code>createServer</code></button>
     <div class="feedback"></div>
 
-    <div class="q">Câu 2. API <code>GET /courses?level=nang-cao</code> chạy tìm và không có khoá học nào khớp. Trả mã gì?</div>
+    <div class="q">Câu 2. API <code>GET /courses?level=advanced</code> chạy tìm và không có khoá học nào khớp. Trả mã gì?</div>
     <button class="opt" data-correct="true" data-explain="Đúng. Tài nguyên '/courses' (danh sách khoá học) TỒN TẠI và bạn trả về được — nó chỉ rỗng. 'Không có kết quả' là một câu trả lời thành công. Nếu trả 404 ở đây, client sẽ không phân biệt được 'tìm không ra' với 'API này không tồn tại/gõ sai đường dẫn' — hai tình huống cần xử lý hoàn toàn khác nhau.">A. <code>200</code> với mảng rỗng</button>
     <button class="opt" data-correct="false" data-explain="Đây là lỗi phổ biến nhất khi mới thiết kế API. 404 nghĩa là 'đường dẫn này không có gì', chứ không phải 'bộ lọc của bạn không ra kết quả'. Trả 404 làm client không phân biệt nổi mình gõ sai URL hay chỉ là không có dữ liệu.">B. <code>404</code> vì không tìm thấy khoá học nào</button>
     <button class="opt" data-correct="false" data-explain="204 nghĩa là 'thành công và cố tình KHÔNG có body' — client sẽ không đọc gì cả. Nhưng ở đây bạn CÓ body để trả (một mảng rỗng, kèm cấu trúc phân trang nếu có). Dùng 204 làm client phải viết thêm nhánh xử lý đặc biệt cho cùng một endpoint.">C. <code>204 No Content</code></button>

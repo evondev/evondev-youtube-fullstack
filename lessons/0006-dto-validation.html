@@ -99,27 +99,30 @@ class-transformer ^<span class="num">0.5</span>.<span class="num">1</span></code
 <span class="cmt">// DTO = hình dạng dữ liệu ĐƯỢC PHÉP đi vào hệ thống.</span>
 <span class="cmt">// Đây là class chứ không phải interface — vì decorator cần tồn tại lúc chạy.</span>
 <span class="kw">export class</span> CreateCourseDto {
-  <span class="kw">@IsString</span>({ message: <span class="str">'title phải là chuỗi'</span> })
-  <span class="kw">@MinLength</span>(<span class="num">3</span>, { message: <span class="str">'title phải từ 3 ký tự'</span> })
+  <span class="kw">@IsString</span>({ message: <span class="str">'title must be a string'</span> })
+  <span class="kw">@MinLength</span>(<span class="num">3</span>, { message: <span class="str">'title must be at least 3 characters'</span> })
   title: <span class="kw">string</span>;
 
-  <span class="kw">@IsIn</span>([<span class="str">'co-ban'</span>, <span class="str">'nang-cao'</span>], { message: <span class="str">'level chỉ nhận co-ban hoặc nang-cao'</span> })
-  level: <span class="str">'co-ban'</span> | <span class="str">'nang-cao'</span>;
+  <span class="kw">@IsIn</span>([<span class="str">'beginner'</span>, <span class="str">'advanced'</span>], { message: <span class="str">'level must be beginner or advanced'</span> })
+  level: <span class="str">'beginner'</span> | <span class="str">'advanced'</span>;
 
-  <span class="kw">@IsInt</span>({ message: <span class="str">'price phải là số nguyên'</span> })
-  <span class="kw">@Min</span>(<span class="num">0</span>, { message: <span class="str">'price không được âm'</span> })
+  <span class="kw">@IsInt</span>({ message: <span class="str">'price must be an integer'</span> })
+  <span class="kw">@Min</span>(<span class="num">0</span>, { message: <span class="str">'price must not be negative'</span> })
   price: <span class="kw">number</span>;
 }</code></pre>
   </div>
 
   <div class="callout why">
-    <div class="ct">💡 Vì sao nên tự viết <code>message</code> tiếng Việt</div>
+    <div class="ct">💡 Vì sao nên tự viết <code>message</code> thay vì để mặc định</div>
     <p style="margin-bottom:0">
-      Bỏ trống thì <code>class-validator</code> sinh câu mặc định tiếng Anh kiểu
-      <code>"title must be longer than or equal to 3 characters"</code> — đúng nhưng lộ tên trường nội bộ
-      và không dùng thẳng cho người dùng cuối được. Tự viết thì frontend <em>hiển thị luôn</em> chuỗi
-      bạn trả về, không phải dịch lại ở hai nơi. Với API sẽ giao cho khách freelance, đây là chi tiết
-      thấy ngay sự khác biệt giữa "chạy được" và "làm cho tử tế".
+      Bỏ trống thì <code>class-validator</code> sinh câu mặc định kiểu
+      <code>"title must be longer than or equal to 3 characters"</code> — đúng nhưng dài dòng và bám sát
+      tên decorator hơn là bám nghiệp vụ của bạn. Tự viết thì thông báo ngắn, nhất quán, và
+      <em>ổn định</em>: nâng cấp thư viện không làm đổi chuỗi mà frontend đang hiển thị. Với API giao cho
+      khách, đây là chi tiết thấy ngay khác biệt giữa "chạy được" và "làm cho tử tế".
+      <br><br>
+      Còn chuyện dịch sang tiếng Việt cho người dùng cuối là việc của tầng <em>i18n</em> ở client —
+      API nên nói một ngôn ngữ duy nhất, và tiếng Anh là mặc định an toàn nhất.
     </p>
   </div>
 
@@ -163,11 +166,11 @@ class-transformer ^<span class="num">0.5</span>.<span class="num">1</span></code
 <span class="cmt">// import { CreateCourseDto } from './dto/create-course.dto';</span>
 
 <span class="cmt">// Đặt cạnh mảng courses, trong class:</span>
-<span class="kw">private</span> idKeTiep = <span class="num">3</span>;
+<span class="kw">private</span> nextId = <span class="num">3</span>;
 
 <span class="fn">create</span>(dto: CreateCourseDto): Course {
   <span class="cmt">// Tới được đây thì dto CHẮC CHẮN đã sạch — pipe đã lọc trước rồi.</span>
-  <span class="kw">const</span> course: Course = { id: <span class="kw">this</span>.idKeTiep++, ...dto };
+  <span class="kw">const</span> course: Course = { id: <span class="kw">this</span>.nextId++, ...dto };
   <span class="kw">this</span>.courses.<span class="fn">push</span>(course);
 
   <span class="kw">return</span> course;
@@ -219,45 +222,45 @@ Mapped {/courses, POST} route</code></pre>
     <span class="code-label">bash — tab 2</span>
 <pre><code><span class="cmt"># 1. Hop le</span>
 curl -s -X POST http://localhost:3333/courses -H <span class="str">'Content-Type: application/json'</span> \
-  -d <span class="str">'{"title":"Redis thuc chien","level":"nang-cao","price":599000}'</span>
+  -d <span class="str">'{"title":"Redis in Practice","level":"advanced","price":599000}'</span>
 
 <span class="cmt"># 2. Sai ca 3 truong cung luc</span>
 curl -s -X POST http://localhost:3333/courses -H <span class="str">'Content-Type: application/json'</span> \
-  -d <span class="str">'{"title":"ab","level":"trung-cap","price":-5}'</span>
+  -d <span class="str">'{"title":"ab","level":"intermediate","price":-5}'</span>
 
 <span class="cmt"># 3. price la CHUOI</span>
 curl -s -X POST http://localhost:3333/courses -H <span class="str">'Content-Type: application/json'</span> \
-  -d <span class="str">'{"title":"Khoa hoc","level":"co-ban","price":"rat re"}'</span>
+  -d <span class="str">'{"title":"Course","level":"beginner","price":"cheap"}'</span>
 
 <span class="cmt"># 4. Kem mot truong LA</span>
 curl -s -X POST http://localhost:3333/courses -H <span class="str">'Content-Type: application/json'</span> \
-  -d <span class="str">'{"title":"Khoa hoc","level":"co-ban","price":100,"isAdmin":true}'</span>
+  -d <span class="str">'{"title":"Course","level":"beginner","price":100,"isAdmin":true}'</span>
 
 <span class="cmt"># 5. Thieu truong</span>
 curl -s -X POST http://localhost:3333/courses -H <span class="str">'Content-Type: application/json'</span> \
-  -d <span class="str">'{"title":"Chi co title"}'</span></code></pre>
+  -d <span class="str">'{"title":"Only title"}'</span></code></pre>
   </div>
 
   <div class="code-block">
     <span class="code-label">output THẬT (đã verify — Nest 11, class-validator 0.15.1)</span>
 <pre><code><span class="cmt"># 1 -&gt; 201 Created</span>
-{<span class="str">"id"</span>:<span class="num">3</span>,<span class="str">"title"</span>:<span class="str">"Redis thuc chien"</span>,<span class="str">"level"</span>:<span class="str">"nang-cao"</span>,<span class="str">"price"</span>:<span class="num">599000</span>}
+{<span class="str">"id"</span>:<span class="num">3</span>,<span class="str">"title"</span>:<span class="str">"Redis in Practice"</span>,<span class="str">"level"</span>:<span class="str">"advanced"</span>,<span class="str">"price"</span>:<span class="num">599000</span>}
 
 <span class="cmt"># 2 -&gt; 400, BAO CA BA LOI MOT LUOT</span>
-{<span class="str">"message"</span>:[<span class="str">"title phải từ 3 ký tự"</span>,
-             <span class="str">"level chỉ nhận co-ban hoặc nang-cao"</span>,
-             <span class="str">"price không được âm"</span>],
+{<span class="str">"message"</span>:[<span class="str">"title must be at least 3 characters"</span>,
+             <span class="str">"level must be beginner or advanced"</span>,
+             <span class="str">"price must not be negative"</span>],
  <span class="str">"error"</span>:<span class="str">"Bad Request"</span>,<span class="str">"statusCode"</span>:<span class="num">400</span>}
 
 <span class="cmt"># 3 -&gt; 400</span>
-{<span class="str">"message"</span>:[<span class="str">"price không được âm"</span>,<span class="str">"price phải là số nguyên"</span>],...}
+{<span class="str">"message"</span>:[<span class="str">"price must not be negative"</span>,<span class="str">"price must be an integer"</span>],...}
 
 <span class="cmt"># 4 -&gt; 400  &lt;-- truong la bi da ra</span>
 {<span class="str">"message"</span>:[<span class="str">"property isAdmin should not exist"</span>],...}
 
 <span class="cmt"># 5 -&gt; 400</span>
-{<span class="str">"message"</span>:[<span class="str">"level chỉ nhận co-ban hoặc nang-cao"</span>,
-             <span class="str">"price không được âm"</span>,<span class="str">"price phải là số nguyên"</span>],...}</code></pre>
+{<span class="str">"message"</span>:[<span class="str">"level must be beginner or advanced"</span>,
+             <span class="str">"price must not be negative"</span>,<span class="str">"price must be an integer"</span>],...}</code></pre>
   </div>
 
   <div class="callout why">
@@ -361,7 +364,7 @@ curl -s -X POST http://localhost:3333/courses -H <span class="str">'Content-Type
     <div class="ct">✅ Dự án của bạn vừa lớn thêm</div>
     <ul class="checklist">
       <li><code>POST /courses</code> tạo được khoá học mới, trả <code>201</code></li>
-      <li>Dữ liệu sai bị chặn bằng <code>400</code> kèm <strong>danh sách</strong> lỗi tiếng Việt</li>
+      <li>Dữ liệu sai bị chặn bằng <code>400</code> kèm <strong>danh sách</strong> lỗi cụ thể</li>
       <li>Trường lạ bị đá ra — dự án đã có lớp chống <em>mass assignment</em></li>
       <li>Hiểu vì sao TypeScript không thay được validation lúc chạy</li>
       <li>Biết khi nào dùng <code>import type</code>, khi nào tuyệt đối không</li>

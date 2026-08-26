@@ -202,6 +202,23 @@ vào dự án e-learning"*.
 **Giữ nguyên lộ trình, đừng đề nghị lại.** Khi nào tới phần "tài liệu API" theo MISSION thì làm,
 hoặc khi Tuấn chủ động hỏi.
 
+### 🔤 CODE VIẾT TIẾNG ANH — chỉ COMMENT là tiếng Việt (Tuấn chốt 2026-08-26)
+
+Tuấn: *"code mọi thứ in english nha, chứ đừng level co ban nang cao nó kì lắm"*.
+
+**Tiếng Anh:** tên biến/hàm/class · giá trị enum (`'beginner' | 'advanced'`, KHÔNG phải `'co-ban'`) ·
+route (`/fast` không phải `/nhanh`) · tên file code · chuỗi log · thông báo lỗi API · dữ liệu mẫu
+(tên khoá học...).
+**Tiếng Việt:** chỉ comment trong code (giữ nguyên rule global) + toàn bộ phần giảng giải.
+
+⚠️ **Đổi tên là output đổi theo** → phải CHẠY LẠI thật rồi dán output mới, không được sửa chữ suông.
+Đã làm đúng vậy khi sửa Bài 02–06 + cheat-sheet ngày 2026-08-26 (số liệu mới: body 5 byte→1 khúc,
+5MB→82 khúc, /fast 0.016s vs 2.710s, 5x /io 3.04s vs 5x /cpu 15.03s).
+
+Ghi chú: thông báo lỗi API cũng chuyển sang tiếng Anh (trước đó Bài 06 cố ý viết tiếng Việt và có hẳn
+callout giải thích). Callout đó đã viết lại thành *"vì sao tự viết message thay vì để mặc định"*, và
+nói rõ dịch cho người dùng cuối là việc của tầng i18n ở client.
+
 ### 🚦 Khi Tuấn bảo "soạn bài mới" → SOẠN LUÔN (Tuấn chốt 2026-08-07)
 
 **Không hỏi lại "tại sao", không chất vấn thứ tự, không đòi điều kiện tiên quyết** (kiểu "bài trước chưa

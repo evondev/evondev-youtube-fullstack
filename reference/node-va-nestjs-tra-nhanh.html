@@ -29,7 +29,7 @@
 
   <div class="code-block">
     <span class="code-label">request &amp; response có cùng cấu trúc, chỉ khác dòng đầu</span>
-<pre><code>GET /courses?level=co-ban HTTP/1.1   <span class="cmt">&lt;- 1. dong dau (method + duong dan + phien ban)</span>
+<pre><code>GET /courses?level=beginner HTTP/1.1   <span class="cmt">&lt;- 1. dong dau (method + duong dan + phien ban)</span>
 Host: localhost:3333                 <span class="cmt">&lt;- 2. cac header</span>
 Content-Type: application/json
                                      <span class="cmt">&lt;- 3. DONG TRONG (ranh gioi duy nhat!)</span>
@@ -72,11 +72,11 @@ HTTP/1.1 <span class="num">200</span> OK                       <span class="cmt"
   <span class="cmt">// (1) request.url la CHUOI THO, dinh ca query -> phai tach</span>
   <span class="kw">const</span> url = <span class="kw">new</span> <span class="fn">URL</span>(request.url, <span class="str">`http://</span>${request.headers.host}<span class="str">`</span>);
   url.pathname;                      <span class="cmt">// '/courses'</span>
-  url.searchParams.<span class="fn">get</span>(<span class="str">'level'</span>);    <span class="cmt">// 'co-ban' | null (KHONG phai undefined)</span>
+  url.searchParams.<span class="fn">get</span>(<span class="str">'level'</span>);    <span class="cmt">// 'beginner' | null (KHONG phai undefined)</span>
 
   <span class="cmt">// (2) body la STREAM, khong co san. Day chinh la "body parser".</span>
   <span class="kw">let</span> raw = <span class="str">''</span>;
-  <span class="kw">for await</span> (<span class="kw">const</span> khuc <span class="kw">of</span> request) raw += khuc;
+  <span class="kw">for await</span> (<span class="kw">const</span> chunk <span class="kw">of</span> request) raw += chunk;
   <span class="kw">try</span> { JSON.<span class="fn">parse</span>(raw); } <span class="kw">catch</span> { <span class="cmt">/* PHAI bat, khong la CHET CA SERVER */</span> }
 
   <span class="cmt">// (3) MOI nhanh deu phai ket thuc response, khong la client treo</span>
@@ -92,7 +92,7 @@ server.<span class="fn">listen</span>(<span class="num">3333</span>);</code></pr
     <tbody>
       <tr><td><code>request.url</code> ≠ đường dẫn</td><td>Dính query string. <code>'/ping?a=1' === '/ping'</code> là <code>false</code></td></tr>
       <tr><td><code>request.body</code> là <code>undefined</code></td><td><code>method</code>/<code>url</code> ở dòng đầu <em>đã tới</em>; body tới sau và có thể rất lớn → Node đưa <em>stream</em></td></tr>
-      <tr><td>Body 5MB → ~83 khúc</td><td>Số khúc <strong>đổi mỗi lần chạy</strong> — đừng bao giờ giả định "về một lần"</td></tr>
+      <tr><td>Body 5MB → ~82 khúc</td><td>Số khúc <strong>đổi mỗi lần chạy</strong> — đừng bao giờ giả định "về một lần"</td></tr>
       <tr><td>Quên <code>response.end()</code></td><td>Client treo, server vẫn "xanh" — nguy hiểm hơn crash vì monitoring không thấy gì</td></tr>
       <tr><td><code>writeHead</code> rồi không đổi được</td><td>Header đã lên dây → <code>ERR_HTTP_HEADERS_SENT</code>. Mọi kiểm tra phải làm <em>trước</em></td></tr>
     </tbody>
@@ -185,12 +185,12 @@ server.<span class="fn">listen</span>(<span class="num">3333</span>);</code></pr
 <span class="kw">catch</span> { <span class="cmt">/* KHONG BAO GIO CHAY - stack da rong khi callback chay */</span> }
 
 <span class="cmt">// BAY 2: quen await -> tra 200 ROI MOI CHET (te nhat vi noi doi client)</span>
-<span class="kw">try</span> { <span class="fn">truyVanDatabase</span>(); }        <span class="cmt">// thieu await</span>
+<span class="kw">try</span> { <span class="fn">queryDatabase</span>(); }          <span class="cmt">// thieu await</span>
 <span class="kw">catch</span> { <span class="cmt">/* khong chay; vai ms sau tien trinh CHET */</span> }
 
 <span class="cmt">// BAY 3: luoi cuoi cung - de LOG, KHONG phai de song sot</span>
-process.<span class="fn">on</span>(<span class="str">'unhandledRejection'</span>, (lyDo) => {
-  logger.<span class="fn">error</span>(lyDo);
+process.<span class="fn">on</span>(<span class="str">'unhandledRejection'</span>, (reason) => {
+  logger.<span class="fn">error</span>(reason);
   process.<span class="fn">exit</span>(<span class="num">1</span>);   <span class="cmt">// chay tiep voi trang thai do dang con NGUY HIEM HON</span>
 });</code></pre>
   </div>
@@ -255,11 +255,11 @@ process.<span class="fn">on</span>(<span class="str">'unhandledRejection'</span>
     <span class="code-label">npm install class-validator class-transformer</span>
 <pre><code><span class="cmt">// dto/create-course.dto.ts — phai la CLASS (interface khong mang duoc decorator)</span>
 <span class="kw">export class</span> CreateCourseDto {
-  <span class="kw">@IsString</span>({ message: <span class="str">'title phải là chuỗi'</span> })
-  <span class="kw">@MinLength</span>(<span class="num">3</span>, { message: <span class="str">'title phải từ 3 ký tự'</span> })
+  <span class="kw">@IsString</span>({ message: <span class="str">'title must be a string'</span> })
+  <span class="kw">@MinLength</span>(<span class="num">3</span>, { message: <span class="str">'title must be at least 3 characters'</span> })
   title: <span class="kw">string</span>;
 
-  <span class="kw">@IsIn</span>([<span class="str">'co-ban'</span>, <span class="str">'nang-cao'</span>]) level: <span class="kw">string</span>;
+  <span class="kw">@IsIn</span>([<span class="str">'beginner'</span>, <span class="str">'advanced'</span>]) level: <span class="kw">string</span>;
   <span class="kw">@IsInt</span>() <span class="kw">@Min</span>(<span class="num">0</span>)              price: <span class="kw">number</span>;
 }
 
@@ -321,7 +321,7 @@ curl -s -o /dev/null -w <span class="str">'%{http_code}\n'</span> http://localho
 <span class="cmt"># POST JSON</span>
 curl -s -X POST http://localhost:3333/courses \
   -H <span class="str">'Content-Type: application/json'</span> \
-  -d <span class="str">'{"title":"abc","level":"co-ban","price":100}'</span>
+  -d <span class="str">'{"title":"abc","level":"beginner","price":100}'</span>
 
 <span class="cmt"># Bam gio mot request</span>
 <span class="fn">time</span> curl -s http://localhost:3333/courses

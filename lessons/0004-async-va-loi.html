@@ -37,38 +37,38 @@
   <h2>1. Thí nghiệm: <code>try/catch</code> ôm trọn mà vẫn bắt trượt</h2>
 
   <p>
-    Tạo <code>lab/04-loi-di-dau.mjs</code>. Đọc kỹ và <strong>đoán trước</strong> xem in ra gì:
+    Tạo <code>lab/04-where-errors-go.mjs</code>. Đọc kỹ và <strong>đoán trước</strong> xem in ra gì:
   </p>
 
   <div class="code-block">
-    <span class="code-label">elearning-api/lab/04-loi-di-dau.mjs</span>
+    <span class="code-label">elearning-api/lab/04-where-errors-go.mjs</span>
 <pre><code><span class="cmt">// try ôm TRỌN VẸN lời gọi setTimeout. Nhìn thì không thể lọt được.</span>
 <span class="kw">try</span> {
   <span class="fn">setTimeout</span>(() => {
-    <span class="kw">throw new</span> <span class="fn">Error</span>(<span class="str">'No ra BEN TRONG callback'</span>);
+    <span class="kw">throw new</span> <span class="fn">Error</span>(<span class="str">'Thrown INSIDE the callback'</span>);
   }, <span class="num">100</span>);
 
-  console.<span class="fn">log</span>(<span class="str">'try chay xong (khong co loi nao o day)'</span>);
-} <span class="kw">catch</span> (loi) {
-  console.<span class="fn">log</span>(<span class="str">'BAT DUOC:'</span>, loi.message);
+  console.<span class="fn">log</span>(<span class="str">'try block finished (no error here)'</span>);
+} <span class="kw">catch</span> (error) {
+  console.<span class="fn">log</span>(<span class="str">'CAUGHT:'</span>, error.message);
 }
 
 <span class="cmt">// Dòng này để kiểm tra: tiến trình còn sống thì nó phải in ra.</span>
-<span class="fn">setTimeout</span>(() => console.<span class="fn">log</span>(<span class="str">'dong nay co chay khong?'</span>), <span class="num">500</span>);</code></pre>
+<span class="fn">setTimeout</span>(() => console.<span class="fn">log</span>(<span class="str">'does this line ever run?'</span>), <span class="num">500</span>);</code></pre>
   </div>
 
   <div class="code-block">
     <span class="code-label">bash</span>
 <pre><code><span class="kw">cd</span> ~/Documents/youtube/fullstack/elearning-api
-node lab/04-loi-di-dau.mjs; <span class="fn">echo</span> <span class="str">"exit=</span>$?<span class="str">"</span></code></pre>
+node lab/04-where-errors-go.mjs; <span class="fn">echo</span> <span class="str">"exit=</span>$?<span class="str">"</span></code></pre>
   </div>
 
   <div class="code-block">
     <span class="code-label">output THẬT (đã verify, Node v22.18.0)</span>
-<pre><code>try chay xong (khong co loi nao o day)
+<pre><code>try block finished (no error here)
 
-Error: No ra BEN TRONG callback
-    at Timeout._onTimeout (file:///.../lab/04-loi-di-dau.mjs:<span class="num">4</span>:<span class="num">11</span>)
+Error: Thrown INSIDE the callback
+    at Timeout._onTimeout (file:///.../lab/04-where-errors-go.mjs:<span class="num">4</span>:<span class="num">11</span>)
     at listOnTimeout (node:internal/timers:<span class="num">588</span>:<span class="num">17</span>)
     at process.processTimers (node:internal/timers:<span class="num">523</span>:<span class="num">7</span>)
 
@@ -77,7 +77,7 @@ exit=<span class="num">1</span></code></pre>
 
   <p>
     Ba thứ đáng chú ý: khối <code>catch</code> <strong>không hề chạy</strong>; tiến trình
-    <strong>chết</strong> (<code>exit=1</code>); và dòng <code>'dong nay co chay khong?'</code>
+    <strong>chết</strong> (<code>exit=1</code>); và dòng <code>'does this line ever run?'</code>
     <strong>không bao giờ in ra</strong>.
   </p>
 
@@ -155,28 +155,28 @@ exit=<span class="num">1</span></code></pre>
 
   <h2>4. Cái bẫy đắt nhất: quên một chữ <code>await</code></h2>
 
-  <p>Tạo <code>lab/04-quen-await.mjs</code>:</p>
+  <p>Tạo <code>lab/04-forgot-await.mjs</code>:</p>
 
   <div class="code-block">
-    <span class="code-label">elearning-api/lab/04-quen-await.mjs</span>
-<pre><code><span class="kw">async function</span> <span class="fn">layKhoaHoc</span>() {
-  <span class="kw">throw new</span> <span class="fn">Error</span>(<span class="str">'Database sap'</span>);
+    <span class="code-label">elearning-api/lab/04-forgot-await.mjs</span>
+<pre><code><span class="kw">async function</span> <span class="fn">findCourses</span>() {
+  <span class="kw">throw new</span> <span class="fn">Error</span>(<span class="str">'Database is down'</span>);
 }
 
 <span class="kw">try</span> {
-  <span class="fn">layKhoaHoc</span>();                       <span class="cmt">// &lt;-- THIEU chu await</span>
-  console.<span class="fn">log</span>(<span class="str">'try chay xong binh thuong (!!)'</span>);
-} <span class="kw">catch</span> (loi) {
-  console.<span class="fn">log</span>(<span class="str">'BAT DUOC:'</span>, loi.message);
+  <span class="fn">findCourses</span>();                      <span class="cmt">// &lt;-- THIEU chu await</span>
+  console.<span class="fn">log</span>(<span class="str">'try block finished normally (!!)'</span>);
+} <span class="kw">catch</span> (error) {
+  console.<span class="fn">log</span>(<span class="str">'CAUGHT:'</span>, error.message);
 }</code></pre>
   </div>
 
   <div class="code-block">
     <span class="code-label">output THẬT (đã verify)</span>
-<pre><code>try chay xong binh thuong (!!)
+<pre><code>try block finished normally (!!)
 
-Error: Database sap
-    at layKhoaHoc (file:///.../lab/04-quen-await.mjs:<span class="num">2</span>:<span class="num">9</span>)
+Error: Database is down
+    at findCourses (file:///.../lab/04-forgot-await.mjs:<span class="num">2</span>:<span class="num">9</span>)
 
 exit=<span class="num">1</span></code></pre>
   </div>
@@ -187,8 +187,8 @@ exit=<span class="num">1</span></code></pre>
 
   <div class="code-block">
     <span class="code-label">output THẬT sau khi thêm <code>await</code></span>
-<pre><code>BAT DUOC: Database sap
-chuong trinh chay tiep binh thuong
+<pre><code>CAUGHT: Database is down
+program continues normally
 
 exit=<span class="num">0</span></code></pre>
   </div>
@@ -214,21 +214,21 @@ exit=<span class="num">0</span></code></pre>
 
   <h2>5. Trả nốt món nợ Bài 03: vì sao microtask chạy trước timer</h2>
 
-  <p>Tạo <code>lab/04-thu-tu.mjs</code>:</p>
+  <p>Tạo <code>lab/04-order.mjs</code>:</p>
 
   <div class="code-block">
-    <span class="code-label">elearning-api/lab/04-thu-tu.mjs</span>
-<pre><code>console.<span class="fn">log</span>(<span class="str">'1 - dong bo'</span>);
+    <span class="code-label">elearning-api/lab/04-order.mjs</span>
+<pre><code>console.<span class="fn">log</span>(<span class="str">'1 - synchronous'</span>);
 <span class="fn">setTimeout</span>(() => console.<span class="fn">log</span>(<span class="str">'5 - macrotask (timer)'</span>), <span class="num">0</span>);
 <span class="fn">Promise.resolve</span>().<span class="fn">then</span>(() => console.<span class="fn">log</span>(<span class="str">'3 - microtask 1'</span>));
 <span class="fn">Promise.resolve</span>().<span class="fn">then</span>(() => console.<span class="fn">log</span>(<span class="str">'4 - microtask 2'</span>));
-console.<span class="fn">log</span>(<span class="str">'2 - dong bo'</span>);</code></pre>
+console.<span class="fn">log</span>(<span class="str">'2 - synchronous'</span>);</code></pre>
   </div>
 
   <div class="code-block">
     <span class="code-label">output THẬT (đã verify)</span>
-<pre><code><span class="num">1</span> - dong bo
-<span class="num">2</span> - dong bo
+<pre><code><span class="num">1</span> - synchronous
+<span class="num">2</span> - synchronous
 <span class="num">3</span> - microtask <span class="num">1</span>
 <span class="num">4</span> - microtask <span class="num">2</span>
 <span class="num">5</span> - macrotask (timer)</code></pre>
@@ -258,26 +258,26 @@ console.<span class="fn">log</span>(<span class="str">'2 - dong bo'</span>);</co
   <h2>6. Lưới an toàn cuối cùng — và vì sao nó <em>không</em> phải cách sửa</h2>
 
   <p>
-    Node cho bạn bắt các promise bị từ chối mà không ai xử lý. Tạo <code>lab/04-luoi-an-toan.mjs</code>:
+    Node cho bạn bắt các promise bị từ chối mà không ai xử lý. Tạo <code>lab/04-safety-net.mjs</code>:
   </p>
 
   <div class="code-block">
-    <span class="code-label">elearning-api/lab/04-luoi-an-toan.mjs</span>
+    <span class="code-label">elearning-api/lab/04-safety-net.mjs</span>
 <pre><code><span class="cmt">// Bắt MỌI promise bị từ chối mà không có .catch() nào.</span>
-process.<span class="fn">on</span>(<span class="str">'unhandledRejection'</span>, (lyDo) => {
-  console.<span class="fn">log</span>(<span class="str">'[LUOI AN TOAN] tom duoc:'</span>, lyDo.message);
+process.<span class="fn">on</span>(<span class="str">'unhandledRejection'</span>, (reason) => {
+  console.<span class="fn">log</span>(<span class="str">'[SAFETY NET] caught:'</span>, reason.message);
   <span class="cmt">// Vẫn thoát — có chủ đích. Xem giải thích bên dưới.</span>
   process.<span class="fn">exit</span>(<span class="num">1</span>);
 });
 
-<span class="kw">async function</span> <span class="fn">hong</span>() { <span class="kw">throw new</span> <span class="fn">Error</span>(<span class="str">'Loi khong ai bat'</span>); }
+<span class="kw">async function</span> <span class="fn">fails</span>() { <span class="kw">throw new</span> <span class="fn">Error</span>(<span class="str">'Nobody catches this'</span>); }
 
-<span class="fn">hong</span>();</code></pre>
+<span class="fn">fails</span>();</code></pre>
   </div>
 
   <div class="code-block">
     <span class="code-label">output THẬT (đã verify)</span>
-<pre><code>[LUOI AN TOAN] tom duoc: Loi khong ai bat
+<pre><code>[SAFETY NET] caught: Nobody catches this
 exit=<span class="num">1</span></code></pre>
   </div>
 

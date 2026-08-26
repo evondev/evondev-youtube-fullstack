@@ -2,7 +2,7 @@ import { createServer } from 'node:http';
 
 // Handler là async vì phần đọc body ở dưới cần `await`.
 const server = createServer(async (request, response) => {
-  // request.url là CHUỖI THÔ, dính cả query string ('/courses?level=co-ban').
+  // request.url là CHUỖI THÔ, dính cả query string ('/courses?level=beginner').
   // new URL() tách nó ra thành pathname + searchParams cho ta.
   // Tham số thứ 2 là "gốc" bắt buộc, vì request.url không có domain.
   const url = new URL(request.url, `http://${request.headers.host}`);
@@ -19,8 +19,8 @@ const server = createServer(async (request, response) => {
 
   // ── Route 2: GET /courses?level=... ────────────────────
   if (method === 'GET' && pathname === '/courses') {
-    // ?? 'tat-ca' = giá trị mặc định khi client không gửi tham số.
-    const level = url.searchParams.get('level') ?? 'tat-ca';
+    // ?? 'all' = giá trị mặc định khi client không gửi tham số.
+    const level = url.searchParams.get('level') ?? 'all';
     response.writeHead(200, {
       'Content-Type': 'application/json; charset=utf-8',
     });
@@ -44,7 +44,7 @@ const server = createServer(async (request, response) => {
         'Content-Type': 'application/json; charset=utf-8',
       });
       return response.end(
-        JSON.stringify({ error: 'Body không phải JSON hợp lệ' }),
+        JSON.stringify({ error: 'Invalid JSON body' }),
       );
     }
 
@@ -52,7 +52,7 @@ const server = createServer(async (request, response) => {
       response.writeHead(400, {
         'Content-Type': 'application/json; charset=utf-8',
       });
-      return response.end(JSON.stringify({ error: 'Thiếu trường title' }));
+      return response.end(JSON.stringify({ error: 'Missing field: title' }));
     }
 
     // 201 = "đã tạo ra tài nguyên mới". Location chỉ tới nơi nó vừa sinh ra.
@@ -73,7 +73,7 @@ const server = createServer(async (request, response) => {
       Allow: 'GET, POST',
     });
     return response.end(
-      JSON.stringify({ error: `Method ${method} không dùng được ở đây` }),
+      JSON.stringify({ error: `Method ${method} not allowed here` }),
     );
   }
 
@@ -82,9 +82,9 @@ const server = createServer(async (request, response) => {
   response.writeHead(404, {
     'Content-Type': 'application/json; charset=utf-8',
   });
-  response.end(JSON.stringify({ error: 'Không tìm thấy' }));
+  response.end(JSON.stringify({ error: 'Not found' }));
 });
 
 server.listen(3337, () => {
-  console.log('Server dang nghe tai http://localhost:3337');
+  console.log('Server listening on http://localhost:3337');
 });
