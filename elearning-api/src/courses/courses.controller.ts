@@ -1,6 +1,15 @@
-import { Controller, Get, Param, ParseIntPipe, Query } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  Param,
+  ParseIntPipe,
+  Post,
+  Query,
+} from '@nestjs/common';
 import type { Course } from './course.interface';
 import { CoursesService } from './courses.service';
+import { CreateCourseDto } from './dto/create-course.dto';
 
 // Mọi route trong class này đều bắt đầu bằng /courses
 @Controller('courses')
@@ -17,5 +26,10 @@ export class CoursesController {
   @Get(':id')
   findOne(@Param('id', ParseIntPipe) id: number): Course {
     return this.coursesService.findOne(id);
+  }
+
+  @Post()
+  create(@Body() dto: CreateCourseDto): Course {
+    return this.coursesService.create(dto);
   }
 }
