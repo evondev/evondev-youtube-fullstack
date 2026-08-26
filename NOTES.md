@@ -225,6 +225,24 @@ Ghi chú: thông báo lỗi API cũng chuyển sang tiếng Anh (trước đó B
 callout giải thích). Callout đó đã viết lại thành *"vì sao tự viết message thay vì để mặc định"*, và
 nói rõ dịch cho người dùng cuối là việc của tầng i18n ở client.
 
+### 🛑 TUYỆT ĐỐI KHÔNG VERIFY TRONG `elearning-api/src/` — đã XOÁ CODE CỦA TUẤN (2026-08-26)
+
+**Sự cố thật:** Tuấn viết `src/courses/` lúc 19:47–20:09 **trong lúc tôi đang làm việc**. Tôi cũng tạo
+`src/courses/` cùng tên để verify bài, rồi `rm -rf src/courses` để "dọn của mình" → **xoá luôn của Tuấn**.
+Kèm theo `git checkout -- src/app.module.ts` xoá nốt dòng import `CoursesModule` Tuấn đã thêm.
+Đã khôi phục được **toàn bộ** từ VS Code local history
+(`~/Library/Application Support/Code/User/History/*/entries.json`).
+
+**Quy tắc cứng từ giờ:**
+1. **KHÔNG tạo/sửa/xoá bất cứ gì trong `elearning-api/src/`.** Muốn verify code bài NestJS thì
+   `cp -R` project sang scratchpad rồi làm ở đó. Chậm hơn vài giây, đổi lại không phá code người học.
+2. **KHÔNG `rm -rf` theo tên thư mục** trong workspace của Tuấn. Tên trùng nhau là chuyện bình thường —
+   bài học bảo Tuấn tạo đúng thư mục đó.
+3. **KHÔNG `git checkout --` / `git restore` file nào Tuấn có thể đã sửa.** `git status` lúc đầu phiên
+   ĐÃ báo `M src/app.module.ts` + `?? courses/` — dấu hiệu rõ ràng mà tôi bỏ qua.
+4. **Đọc `git status` đầu phiên như bản đồ "vùng cấm"**: mọi file `M`/`??` là việc đang dở của Tuấn.
+5. Nhớ: **Tuấn vừa học vừa gõ song song với tôi.** Workspace không bao giờ là của riêng tôi.
+
 ### 🚦 Khi Tuấn bảo "soạn bài mới" → SOẠN LUÔN (Tuấn chốt 2026-08-07)
 
 **Không hỏi lại "tại sao", không chất vấn thứ tự, không đòi điều kiện tiên quyết** (kiểu "bài trước chưa
