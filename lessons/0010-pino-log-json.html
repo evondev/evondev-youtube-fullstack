@@ -1,0 +1,393 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Bài 10 · Pino: log JSON cho máy đọc, và tự động che secret</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="lesson.css">
+</head>
+<body>
+<div class="wrap">
+
+  <span class="lesson-tag">Module 2 · Bài 10</span>
+  <h1>Pino: log JSON cho máy đọc, và tự động che secret</h1>
+  <p class="subtitle">Log của bạn đang viết cho <em>người</em>. Production cần log viết cho <em>máy</em> — và cần một tấm lưới chặn secret lọt vào log.</p>
+  <p class="meta-line">⏱ ~40 phút · 🎯 Sản phẩm: dev in log gọn dễ đọc, production xuất JSON một dòng lọc được bằng máy, và mọi <code>password</code> / <code>Authorization</code> tự động bị che.</p>
+
+  <div class="callout bridge">
+    <div class="ct">🌉 Bắc cầu từ Bài 09</div>
+    <p>
+      Cuối Bài 09 tôi có nói: log hiện vẫn là <em>văn bản cho người đọc</em>, và hệ thống thật thường
+      log ra JSON — nhưng tôi hoãn lại vì lúc đó thứ đắt giá nhất (request-id) đã có rồi.
+    </p>
+    <p style="margin-bottom:0">
+      Giờ ta làm nốt. Và có một tin thú vị: <strong>thư viện ta sắp dùng hoạt động y hệt cách bạn đã tự
+      viết tay ở Bài 09</strong> — nó cũng dùng <code>AsyncLocalStorage</code>. Bạn sẽ không học một thứ
+      xa lạ, mà là <em>thay bản thủ công của mình bằng bản công nghiệp</em>, và hiểu chính xác nó làm gì bên trong.
+    </p>
+  </div>
+
+  <h2>1. Vì sao <code>grep</code> không đủ nữa</h2>
+
+  <p>
+    Ở Bài 09, cách tra log là <code>grep "457f82f2" app.log</code>. Nó hoạt động — cho tới khi gặp ba
+    tình huống rất bình thường:
+  </p>
+
+  <table class="data">
+    <thead><tr><th>Tình huống</th><th>Với log văn bản</th><th>Với log JSON</th></tr></thead>
+    <tbody>
+      <tr>
+        <td>"Cho tôi mọi lỗi <code>5xx</code> trong 1 giờ qua"</td>
+        <td><span class="nullcell">viết regex, và sai sót</span></td>
+        <td>lọc <code>level &gt;= 50</code></td>
+      </tr>
+      <tr>
+        <td>"Endpoint nào chậm nhất?"</td>
+        <td>gần như không làm được</td>
+        <td>gom theo <code>req.url</code>, tính trung bình</td>
+      </tr>
+      <tr>
+        <td>Log nằm trên <em>5 máy</em> khác nhau</td>
+        <td>ssh vào từng máy mà grep</td>
+        <td>đổ chung vào một chỗ, truy vấn như database</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="callout why">
+    <div class="ct">💡 Khác biệt cốt lõi: log là <em>dữ liệu</em>, không phải <em>câu văn</em></div>
+    <p style="margin-bottom:0">
+      Dòng <code>[457f82f2] Looking up course id=99</code> với máy chỉ là một chuỗi ký tự — muốn biết
+      "id là 99" phải tự cắt chuỗi. Còn <code>{"req":{"id":"457f82f2"},"msg":"Looking up course id=99"}</code>
+      thì <strong>đã là dữ liệu có cấu trúc</strong>: máy đọc được trường nào ra trường nấy, lọc và gom
+      nhóm được ngay. Đó là toàn bộ ý nghĩa của chữ <em>"có cấu trúc"</em> trong "structured logging".
+    </p>
+  </div>
+
+  <h2>2. Cài đặt</h2>
+
+  <div class="code-block">
+    <span class="code-label">bash</span>
+<pre><code><span class="kw">cd</span> ~/Documents/youtube/fullstack/elearning-api
+
+<span class="cmt"># pino: bộ ghi log · pino-http: bọc theo request · nestjs-pino: nối vào Nest</span>
+npm install nestjs-pino pino pino-http
+
+<span class="cmt"># pino-pretty CHỈ dùng lúc dev -&gt; --save-dev, không lên production</span>
+npm install --save-dev pino-pretty</code></pre>
+  </div>
+
+  <div class="code-block">
+    <span class="code-label">phiên bản đã verify</span>
+<pre><code>nestjs-pino  ^<span class="num">4.6</span>.<span class="num">1</span>      pino        ^<span class="num">10.3</span>.<span class="num">1</span>
+pino-http    ^<span class="num">11.0</span>.<span class="num">0</span>     pino-pretty ^<span class="num">13.1</span>.<span class="num">3</span> (dev)</code></pre>
+  </div>
+
+  <div class="callout tip">
+    <div class="ct">🔎 Vì sao <code>pino-pretty</code> phải là devDependency</div>
+    <p style="margin-bottom:0">
+      Vì production <strong>không nên</strong> in đẹp: tô màu và xuống dòng làm log to hơn, chậm hơn, và
+      phá vỡ định dạng JSON mà hệ thống thu thập log cần. Nó chỉ tồn tại để mắt bạn đọc được lúc dev.
+      Để nhầm sang <code>dependencies</code> thì bản build production phình lên vô ích.
+    </p>
+  </div>
+
+  <h2>3. Cấu hình — ba việc trong một chỗ</h2>
+
+  <p>Sửa <code>src/app.module.ts</code>:</p>
+
+  <div class="code-block">
+    <span class="code-label">elearning-api/src/app.module.ts</span>
+<pre><code><span class="kw">import</span> { LoggerModule } <span class="kw">from</span> <span class="str">'nestjs-pino'</span>;        <span class="cmt">// ← THÊM</span>
+<span class="kw">import</span> { randomUUID } <span class="kw">from</span> <span class="str">'node:crypto'</span>;          <span class="cmt">// ← THÊM</span>
+
+<span class="cmt">// ... trong mảng imports, đặt TRƯỚC CoursesModule:</span>
+<span class="fn">LoggerModule.forRoot</span>({
+  pinoHttp: {
+    <span class="cmt">// ── Việc 1: sinh / tôn trọng request-id ──────────────────</span>
+    <span class="cmt">// Đúng logic bạn tự viết trong middleware ở Bài 09.</span>
+    genReqId: (req, res) => {
+      <span class="kw">const</span> incoming = req.headers[<span class="str">'x-request-id'</span>];
+      <span class="kw">const</span> id =
+        <span class="kw">typeof</span> incoming === <span class="str">'string'</span> &amp;&amp; incoming.<span class="fn">trim</span>() !== <span class="str">''</span>
+          ? incoming
+          : <span class="fn">randomUUID</span>();
+      res.<span class="fn">setHeader</span>(<span class="str">'x-request-id'</span>, id);   <span class="cmt">// trả lại cho client</span>
+      <span class="kw">return</span> id;
+    },
+
+    <span class="cmt">// ── Việc 2: CHE secret trước khi ghi ra log ──────────────</span>
+    redact: {
+      paths: [
+        <span class="str">'req.headers.authorization'</span>,   <span class="cmt">// token Bearer</span>
+        <span class="str">'req.headers.cookie'</span>,          <span class="cmt">// session</span>
+        <span class="str">'req.body.password'</span>,
+        <span class="str">'*.password'</span>,                   <span class="cmt">// mọi field tên password, ở BẤT KỲ object nào</span>
+        <span class="str">'*.jwtSecret'</span>,
+      ],
+      censor: <span class="str">'[DA CHE]'</span>,               <span class="cmt">// chuỗi thay thế</span>
+    },
+
+    <span class="cmt">// ── Việc 3: dev in đẹp, production ra JSON ───────────────</span>
+    <span class="cmt">// undefined = không qua transport nào = pino in JSON thuần (mặc định).</span>
+    transport:
+      process.env.NODE_ENV === <span class="str">'development'</span>
+        ? {
+            target: <span class="str">'pino-pretty'</span>,
+            options: {
+              singleLine: <span class="kw">true</span>,
+              translateTime: <span class="str">'HH:MM:ss'</span>,
+              <span class="cmt">// Giấu bớt cho log dev dễ đọc; bản JSON production vẫn giữ ĐỦ.</span>
+              ignore: <span class="str">'pid,hostname,context,req,res,responseTime'</span>,
+              <span class="cmt">// Tự dựng dòng hiển thị: [id] [class] nội dung</span>
+              messageFormat: <span class="str">'[{req.id}] [{context}] {msg}'</span>,
+            },
+          }
+        : <span class="kw">undefined</span>,
+  },
+}),</code></pre>
+  </div>
+
+  <p>Rồi bảo Nest dùng logger này trong <code>src/main.ts</code>:</p>
+
+  <div class="code-block">
+    <span class="code-label">elearning-api/src/main.ts</span>
+<pre><code><span class="cmt">// Đổi tên khi import để khỏi đụng với Logger của @nestjs/common</span>
+<span class="kw">import</span> { Logger <span class="kw">as</span> PinoNestLogger } <span class="kw">from</span> <span class="str">'nestjs-pino'</span>;   <span class="cmt">// ← THÊM</span>
+
+<span class="cmt">// Thay dòng app.useLogger(new AppLogger()) của Bài 09 bằng:</span>
+app.<span class="fn">useLogger</span>(app.<span class="fn">get</span>(PinoNestLogger));</code></pre>
+  </div>
+
+  <div class="callout warn">
+    <div class="ct">⚠️ Bài 09 của bạn giờ thành thừa — và đó là chuyện tốt</div>
+    <p style="margin-bottom:0">
+      <code>nestjs-pino</code> đã lo cả <em>sinh request-id</em> lẫn <em>gắn id vào mỗi dòng log</em>, nên
+      <code>RequestIdMiddleware</code> và <code>AppLogger</code> bạn viết ở Bài 09 <strong>không còn cần
+      thiết</strong>. Bạn có thể gỡ chúng khỏi <code>app.module.ts</code> và <code>main.ts</code>.
+      <br><br>
+      Nhưng <strong>giữ lại file <code>request-context.ts</code></strong> — filter ở Bài 07 vẫn đang gọi
+      <code>getRequestId()</code> để đưa id vào body lỗi. Nếu bạn gỡ middleware thì hàm đó trả
+      <code>undefined</code>; muốn giữ <code>requestId</code> trong body lỗi thì cứ để nguyên middleware
+      chạy song song — nó rẻ, và hai bên dùng chung một id vì <em>cùng đọc từ header</em>.
+    </p>
+  </div>
+
+  <h2>4. Chạy ở chế độ dev</h2>
+
+  <p>
+    <code>.env</code> của bạn đang có <code>NODE_ENV=development</code> (từ Bài 08) — nên pino sẽ đi
+    nhánh <code>pino-pretty</code>. Khởi động lại rồi bắn 3 request cùng lúc:
+  </p>
+
+  <div class="code-block">
+    <span class="code-label">bash</span>
+<pre><code><span class="fn">seq</span> <span class="num">3</span> | xargs -P<span class="num">3</span> -I{} curl -s -o /dev/null http://localhost:3333/courses/99</code></pre>
+  </div>
+
+  <div class="code-block">
+    <span class="code-label">log server — THẬT (đã verify)</span>
+<pre><code>[<span class="num">14</span>:<span class="num">43</span>:<span class="num">57</span>] INFO: [63bf0468-4823-45f0-8dcd-88b244fbbee6] [CoursesService] Looking up course id=<span class="num">99</span>
+[<span class="num">14</span>:<span class="num">43</span>:<span class="num">57</span>] INFO: [9b02949e-461d-49f7-b99b-7c7671daaabe] [CoursesService] Looking up course id=<span class="num">99</span>
+[<span class="num">14</span>:<span class="num">43</span>:<span class="num">57</span>] INFO: [66a3bea4-307c-44df-8ebf-cb7913beae8c] [CoursesService] Looking up course id=<span class="num">99</span></code></pre>
+  </div>
+
+  <p>
+    Vẫn tách bạch như Bài 09, và gọn hơn. Chú ý: <strong><code>courses.service.ts</code> vẫn không bị
+    sửa một chữ nào</strong> — đây là lần thứ hai bạn thay toàn bộ tầng log mà code nghiệp vụ không hay biết.
+  </p>
+
+  <h2>5. Chạy ở chế độ production — JSON thật</h2>
+
+  <p>Đổi <code>.env</code> thành <code>NODE_ENV=production</code>, khởi động lại rồi gọi:</p>
+
+  <div class="code-block">
+    <span class="code-label">bash</span>
+<pre><code>curl -s -o /dev/null -H <span class="str">'Authorization: Bearer SIEU-BI-MAT'</span> \
+  http://localhost:3333/courses/99</code></pre>
+  </div>
+
+  <div class="code-block">
+    <span class="code-label">một dòng log THẬT (đã tách trường cho dễ nhìn)</span>
+<pre><code>level    : <span class="num">30</span>
+msg      : Looking up course id=<span class="num">99</span>
+context  : CoursesService
+req.id   : b4f9c602-34f9-4b5c-9fb2-4c7c3dba8b64
+req.url  : /courses/99
+auth hdr : [DA CHE]        <span class="cmt">&lt;-- token BỊ CHE, không lọt vào log</span></code></pre>
+  </div>
+
+  <div class="callout tip">
+    <div class="ct">🔎 <code>level</code> là số, không phải chữ — và đó là chủ ý</div>
+    <p style="margin-bottom:0">
+      <code>10</code> trace · <code>20</code> debug · <code>30</code> info · <code>40</code> warn ·
+      <code>50</code> error · <code>60</code> fatal. Dùng số để <strong>so sánh được</strong>:
+      "cho tôi mọi thứ nghiêm trọng hơn cảnh báo" chỉ là <code>level &gt;= 50</code>. Với chuỗi
+      <code>"error"</code>, <code>"fatal"</code> thì bạn phải liệt kê tay và sẽ sót.
+    </p>
+  </div>
+
+  <h2>6. Phần đáng giá nhất: che secret tự động</h2>
+
+  <p>
+    Đây là thứ tôi muốn Tuấn nhớ nhất ở bài này. Nhớ Bài 07 — ta cẩn thận <em>không trả</em> chi tiết
+    lỗi ra client. Nhưng có một đường rò rỉ khác, âm thầm hơn nhiều: <strong>secret lọt vào log</strong>.
+  </p>
+
+  <div class="code-block">
+    <span class="code-label">một dòng code trông rất vô hại</span>
+<pre><code><span class="cmt">// Lập trình viên đang debug, log cả object user ra xem:</span>
+<span class="kw">this</span>.logger.<span class="fn">log</span>({ user });   <span class="cmt">// user có field password bên trong</span></code></pre>
+  </div>
+
+  <p>Với <code>redact</code> đã cấu hình, kết quả thật khi log một object có <code>password</code> lồng bên trong:</p>
+
+  <div class="code-block">
+    <span class="code-label">THẬT (đã verify)</span>
+<pre><code>{<span class="str">"email"</span>: <span class="str">"a@b.c"</span>, <span class="str">"password"</span>: <span class="str">"[DA CHE]"</span>}
+
+<span class="cmt"># Tìm nguyên văn mật khẩu trong toàn bộ file log:</span>
+<span class="fn">grep</span> -c <span class="str">"MatKhauThat123"</span> app.log   →  <span class="num">0</span></code></pre>
+  </div>
+
+  <div class="callout danger">
+    <div class="ct">🚨 Vì sao secret trong log nguy hiểm hơn bạn nghĩ</div>
+    <p>
+      Log không nằm yên một chỗ. Nó được <strong>sao chép đi khắp nơi</strong>: gửi lên dịch vụ thu thập
+      log, lưu trữ nhiều tháng, và <em>nhiều người có quyền đọc hơn hẳn số người được đọc database</em> —
+      cả đội dev, cả bên vận hành. Một mật khẩu lọt vào log nghĩa là nó nằm trong bản sao lưu của
+      bên thứ ba, vĩnh viễn.
+    </p>
+    <p style="margin-bottom:0">
+      Và nó xảy ra do <strong>tai nạn</strong>, không do ác ý: ai đó thêm một dòng
+      <code>logger.log({ user })</code> lúc 11 giờ đêm để debug rồi quên xoá.
+      <code>redact</code> là <em>tấm lưới đỡ phía dưới</em> — nó không đòi ai phải nhớ điều gì.
+      <strong>Chống rò rỉ bằng cơ chế, đừng chống bằng kỷ luật.</strong>
+      Chính là tinh thần "liệt kê thứ được phép" ở Bài 06, lần này áp cho đầu ra.
+    </p>
+  </div>
+
+  <div class="callout warn">
+    <div class="ct">⚠️ Giới hạn thật của <code>redact</code> — đừng tin nó mù quáng</div>
+    <p style="margin-bottom:0">
+      Nó che theo <strong>TÊN TRƯỜNG</strong>, không hiểu nội dung. Đặt tên <code>pass</code>,
+      <code>pwd</code>, <code>secretKey</code> mà không khai trong <code>paths</code> thì nó
+      <em>không che</em>. Và nếu bạn nhét mật khẩu vào giữa một chuỗi
+      (<code>logger.log(`user=${email} pass=${password}`)</code>) thì <code>redact</code> hoàn toàn bó tay
+      — với nó, đó chỉ là một câu văn.
+      <br><br>
+      Vậy nên: <strong>log OBJECT, đừng log chuỗi ghép tay</strong>. Vừa cho redact có chỗ bám, vừa đúng
+      tinh thần "log là dữ liệu" ở phần 1.
+    </p>
+  </div>
+
+  <h2>7. Cùng một chuyện, hai bộ mặt</h2>
+
+  <table class="data">
+    <thead><tr><th></th><th><code>NODE_ENV=development</code></th><th><code>NODE_ENV=production</code></th></tr></thead>
+    <tbody>
+      <tr><td>Định dạng</td><td>một dòng, có màu</td><td>JSON một dòng</td></tr>
+      <tr><td>Ai đọc</td><td>mắt bạn</td><td>máy thu thập log</td></tr>
+      <tr><td>Nội dung</td><td>đã lược bớt cho gọn</td><td><span class="nullcell">đầy đủ</span> — headers, thời gian phản hồi…</td></tr>
+      <tr><td>Tốc độ</td><td>chậm hơn (phải định dạng)</td><td>nhanh — pino ghi JSON thẳng</td></tr>
+    </tbody>
+  </table>
+
+  <div class="callout why">
+    <div class="ct">💡 Chỗ này khép lại một vòng từ Bài 08</div>
+    <p style="margin-bottom:0">
+      Biến <code>NODE_ENV</code> bạn khai báo và <em>bắt buộc phải hợp lệ</em> ở Bài 08 — giờ nó có việc
+      thật để làm: quyết định log ra hình dạng nào. Nếu ai đó deploy mà gõ nhầm
+      <code>NODE_ENV=prod</code>, Bài 08 đã chặn ngay từ lúc khởi động. Không có bước đó, bạn sẽ chạy
+      production với <code>pino-pretty</code> mà không hay biết — log không máy nào đọc được, và bạn chỉ
+      phát hiện đúng lúc cần tra sự cố nhất.
+    </p>
+  </div>
+
+  <div class="quiz">
+    <h3>🧠 Kiểm tra nhanh (bấm để có phản hồi ngay)</h3>
+
+    <div class="q">Câu 1. Vì sao production cần log JSON thay vì văn bản dễ đọc?</div>
+    <button class="opt" data-correct="false" data-explain="JSON thường DÀI hơn văn bản thuần vì có tên trường lặp lại mỗi dòng. Lợi ích nằm ở chỗ khác — và đáng đánh đổi vài byte.">A. Vì JSON tốn ít dung lượng hơn</button>
+    <button class="opt" data-correct="true" data-explain="Đúng. Với văn bản, 'cho tôi mọi lỗi 5xx giờ qua' phải viết regex và vẫn sót; với JSON chỉ là lọc level >= 50. Khi log nằm trên nhiều máy, JSON đổ chung vào một chỗ và truy vấn như database. Đó là ý nghĩa của chữ 'có cấu trúc'.">B. Vì máy lọc/gom nhóm được theo trường, thay vì phải cắt chuỗi bằng regex</button>
+    <button class="opt" data-correct="false" data-explain="Ngược lại — JSON thuần khó đọc bằng mắt hơn hẳn, đó chính là lý do phải có pino-pretty cho lúc dev. JSON là để cho MÁY đọc.">C. Vì JSON dễ đọc bằng mắt hơn</button>
+    <div class="feedback"></div>
+
+    <div class="q">Câu 2. <code>nestjs-pino</code> gắn được <code>req.id</code> vào mọi dòng log nhờ cơ chế nào?</div>
+    <button class="opt" data-correct="false" data-explain="Không có biến toàn cục nào — nó sẽ bị request khác ghi đè ngay, đúng cái bẫy 'một tiến trình phục vụ mọi người' từ Bài 01.">A. Lưu id vào một biến toàn cục</button>
+    <button class="opt" data-correct="true" data-explain="Đúng — và README của chính thư viện nói vậy. Nghĩa là bản bạn tự viết tay ở Bài 09 KHÔNG phải đồ chơi: nó đúng cách mà thư viện công nghiệp làm. Khác biệt chỉ là pino lo thêm JSON, redact, level, hiệu năng.">B. <code>AsyncLocalStorage</code> — đúng thứ bạn tự viết tay ở Bài 09</button>
+    <button class="opt" data-correct="false" data-explain="Không hề — service của bạn vẫn gọi this.logger.log('...') y như cũ, không nhận thêm tham số nào. Đó chính là điểm mạnh: đổi cả tầng log mà code nghiệp vụ không phải sửa.">C. Truyền id qua tham số của mọi hàm</button>
+    <div class="feedback"></div>
+
+    <div class="q">Câu 3. Bạn đặt tên trường là <code>pwd</code> thay vì <code>password</code>, và <code>paths</code> chỉ khai <code>'*.password'</code>. Chuyện gì xảy ra?</div>
+    <button class="opt" data-correct="false" data-explain="Pino không đoán ngữ nghĩa. Nó so khớp TÊN TRƯỜNG một cách máy móc — 'pwd' không khớp 'password' thì thôi.">A. Vẫn được che, vì pino nhận ra đó là mật khẩu</button>
+    <button class="opt" data-correct="true" data-explain="Đúng, và đây là giới hạn thật phải nhớ. redact che theo TÊN TRƯỜNG, không hiểu nội dung. Hệ quả thực chiến: phải thống nhất quy ước đặt tên trong cả dự án, và rà lại paths mỗi khi thêm trường nhạy cảm mới.">B. <code>pwd</code> lọt thẳng vào log — redact chỉ khớp theo tên trường đã khai</button>
+    <button class="opt" data-correct="false" data-explain="Không có lỗi nào cả — và chính sự IM LẶNG đó mới nguy hiểm. Bạn tưởng đã an toàn trong khi mật khẩu đang chảy vào log.">C. Pino báo lỗi vì có trường nhạy cảm chưa khai báo</button>
+    <div class="feedback"></div>
+
+    <div class="q">Câu 4. Vì sao nên <code>logger.log({ user })</code> thay vì <code>logger.log(`user=${email} pass=${password}`)</code>?</div>
+    <button class="opt" data-correct="false" data-explain="Độ dài gần như không đổi, và đó không phải điều đáng quan tâm ở đây.">A. Vì chuỗi ghép tay dài hơn</button>
+    <button class="opt" data-correct="true" data-explain="Đúng, hai lý do cùng chỉ về một hướng. (1) redact cần TRƯỜNG để bám — nhét mật khẩu vào giữa một chuỗi thì với nó đó chỉ là câu văn, che không được. (2) Object giữ được cấu trúc để máy lọc/gom nhóm. Cả hai đều là 'log là dữ liệu, không phải câu văn'.">B. Vì redact cần trường để bám, và object mới giữ được cấu trúc cho máy lọc</button>
+    <button class="opt" data-correct="false" data-explain="Chênh lệch hiệu năng không đáng kể và không phải lý do. Lý do là an toàn + khả năng truy vấn.">C. Vì ghép chuỗi chậm hơn nhiều</button>
+    <div class="feedback"></div>
+
+    <div class="q">Câu 5. Ai đó deploy production nhưng gõ nhầm <code>NODE_ENV=prod</code>. Chuyện gì xảy ra, nhờ đâu?</div>
+    <button class="opt" data-correct="false" data-explain="Không lọt được — vì Bài 08 đã dựng hàng rào. Nếu KHÔNG có bài 08 thì đúng là nó chạy với pino-pretty và bạn chỉ phát hiện đúng lúc cần tra sự cố nhất.">A. Chạy bình thường nhưng log ra định dạng pretty, không ai phát hiện</button>
+    <button class="opt" data-correct="true" data-explain="Đúng — vòng tròn khép lại từ Bài 08. @IsEnum chỉ nhận development | production | test, nên 'prod' làm app từ chối khởi động với exit=1 và hạ tầng tự dừng rollout. Đây là ví dụ rất cụ thể cho câu 'chết sớm rẻ hơn chết muộn'.">B. App từ chối khởi động với <code>exit=1</code> — <code>@IsEnum</code> ở Bài 08 chặn lại</button>
+    <button class="opt" data-correct="false" data-explain="Pino không tự đoán môi trường. Nó chỉ làm đúng những gì cấu hình bảo — mà cấu hình so sánh chính xác với chuỗi 'development'.">C. Pino tự nhận ra và chuyển sang JSON</button>
+    <div class="feedback"></div>
+  </div>
+
+  <div class="callout tip">
+    <div class="ct">✅ Dự án của bạn vừa lớn thêm</div>
+    <ul class="checklist">
+      <li>Dev: log một dòng gọn, có <code>[request-id]</code> và <code>[tên class]</code></li>
+      <li>Production: JSON một dòng, máy thu thập log đọc và truy vấn được</li>
+      <li><code>Authorization</code>, <code>cookie</code>, mọi <code>password</code> <strong>tự động bị che</strong></li>
+      <li>Biết giới hạn của <code>redact</code>: che theo tên trường, nên phải log object chứ đừng ghép chuỗi</li>
+      <li>Thấy tận mắt: thay cả tầng log lần thứ hai mà <code>courses.service.ts</code> vẫn không sửa một chữ</li>
+    </ul>
+  </div>
+
+  <h2>8. Câu hỏi tư duy (bắc cầu sang Module 3)</h2>
+
+  <p>
+    Module 2 khép lại ở đây — API của bạn đã có kiến trúc, validate, lỗi chuẩn hoá, cấu hình an toàn và
+    log truy vết được. Nhưng nhìn lại <code>CoursesService</code>: dữ liệu vẫn là <strong>một mảng cứng
+    trong bộ nhớ</strong>. Khởi động lại là mọi khoá học tạo bằng <code>POST</code> bốc hơi.
+  </p>
+  <p>
+    Trước khi thay bằng Postgres, thử tự trả lời: một khoá học có <em>nhiều bài học</em>; một học viên
+    <em>mua nhiều khoá</em>; một khoá <em>có nhiều học viên</em>.
+    <strong>Bạn vẽ những bảng nào, và cái quan hệ "nhiều–nhiều" kia để ở đâu?</strong>
+  </p>
+  <p>
+    Câu khó hơn, và nó quyết định cả kiến trúc: khi học viên mua khoá học, <em>giá tiền</em> lưu ở đâu?
+    Lưu trong bảng khoá học thì hôm sau bạn giảm giá — <strong>hoá đơn cũ có tự đổi theo không?</strong>
+  </p>
+
+  <div class="next-box">
+    <div class="nl">→ Module tiếp theo</div>
+    <div class="nt">Module 3 · Dữ liệu &amp; Postgres — nơi junior và senior khác nhau rõ nhất</div>
+    <p class="nd">Thiết kế schema e-learning, quan hệ, index, Prisma 7, và cái bẫy N+1. Ai cũng viết được CRUD; ít người biết vì sao trang 10.000 chậm.</p>
+  </div>
+
+  <div class="navbar">
+    <a href="0009-logging-request-id.html">← Trước</a>
+    <a href="index.html">🏠 Mục lục</a>
+    <a class="disabled">Sau →</a>
+  </div>
+
+  <p class="try-it">
+    💬 <strong>Chạy tới đâu thấy lạ thì hỏi ngay.</strong> Thấy dev in gọn có id, đổi
+    <code>NODE_ENV=production</code> ra JSON, và <code>grep</code> mật khẩu trong log về <code>0</code> —
+    là Module 2 xong.
+  </p>
+
+</div>
+<script src="lesson-enhance.js"></script>
+</body>
+</html>

@@ -88,10 +88,10 @@ Cách đếm: số file trong `reference/` so với số bài trong `lessons/`.
 
 | Mốc | Trạng thái |
 |---|---|
-| Bài đã soạn | 10 (Bài 00 → Bài 09) |
+| Bài đã soạn | 11 (Bài 00 → Bài 10) |
 | Cheat-sheet đã có | 2 — `docker-lenh-thiet-yeu.html` (Module 0) · **`node-va-nestjs-tra-nhanh.html`** (gom Bài 01→06, soạn 2026-08-25) |
-| Số bài KỂ TỪ cheat-sheet gần nhất | **3** (Bài 07, 08, 09) |
-| **Trigger kế tiếp** | 🔴 **Module 2 XONG ở Bài 09** → tới ngưỡng. Cheat-sheet kế: *NestJS thực chiến* (Module/DI, pipe, filter, config, middleware, AsyncLocalStorage). Soạn khi Tuấn học xong Bài 09, TRƯỚC khi vào Module 3. |
+| Số bài KỂ TỪ cheat-sheet gần nhất | **4** (Bài 07, 08, 09, 10) |
+| **Trigger kế tiếp** | 🔴 **Module 2 XONG ở Bài 09** → tới ngưỡng. Cheat-sheet kế: *NestJS thực chiến* (Module/DI, pipe, filter, config, middleware, AsyncLocalStorage). Soạn khi Tuấn học xong Bài 10, TRƯỚC khi vào Module 3. Nhớ gồm cả pino/redact. |
 
 ## Việc cần làm / theo dõi
 
@@ -234,6 +234,21 @@ Tuấn yêu cầu soạn sẵn 07+08+09 để học một lần. Đã verify to�
 - **Bài 09** request-id: `AsyncLocalStorage`, tôn trọng `x-request-id` client gửi, id vào cả body lỗi lẫn log.
 - Cả ba nối thành một mạch: hình dạng lỗi (07) → biết mình chạy ở đâu (08) → truy vết được là ai (09).
 - ⚠️ Bài 07 có route `boom` TẠM để demo 500 — bài đã dặn Tuấn xoá sau khi thử. Nhắc lại lúc chấm.
+
+### 📗 Bài 10 (pino) — THÊM theo yêu cầu Tuấn (2026-08-27)
+
+Tuấn: *"tôi thấy pino hay mà, bro đưa vào tôi học luôn"*. Bài 09 vốn có callout nói "chưa đưa pino vào";
+giờ tách thành **Bài 10** riêng thay vì nhét thêm vào Bài 09 (giữ rule mỗi bài một thứ).
+- Phiên bản đã verify: `nestjs-pino ^4.6.1` · `pino ^10.3.1` · `pino-http ^11.0.0` · `pino-pretty ^13.1.3` (dev).
+- **Điểm bán hàng chính là `redact`** (che secret trong log), không phải JSON — nó nối thẳng vào bài
+  "đừng rò rỉ" ở Bài 07 và là thứ Tuấn dùng thật khi làm freelance.
+- Đã verify thật: `authorization` → `[DA CHE]`, `*.password` che cả object lồng nhau, `grep` mật khẩu = 0.
+- Dev dùng `pino-pretty` + `messageFormat: '[{req.id}] [{context}] {msg}'`; production JSON thuần.
+  `NODE_ENV` từ Bài 08 quyết định — khép vòng rất đẹp.
+- ✅ Xác nhận từ README nestjs-pino: nó dùng **AsyncLocalStorage** bên dưới → bản thủ công Bài 09 của
+  Tuấn không phí, đó đúng cách thư viện công nghiệp làm. Bài 10 nói thẳng điều này.
+- ⚠️ Bài 10 có dặn Tuấn rằng middleware + AppLogger của Bài 09 thành thừa, NHƯNG giữ
+  `request-context.ts` vì filter Bài 07 còn gọi `getRequestId()` cho body lỗi.
 
 ### 🛑 TUYỆT ĐỐI KHÔNG VERIFY TRONG `elearning-api/src/` — đã XOÁ CODE CỦA TUẤN (2026-08-26)
 
