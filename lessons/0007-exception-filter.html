@@ -63,25 +63,55 @@ curl -s -X POST http://localhost:3333/courses \
 
   <p>
     Hai khuôn trên ít ra còn do bạn chủ động ném ra. Giờ xem cái bạn <em>không</em> chủ động.
-    Thêm tạm route này vào <code>courses.controller.ts</code> — <strong>đặt TRƯỚC <code>@Get(':id')</code></strong>:
   </p>
 
-  <div class="code-block">
-    <span class="code-label">elearning-api/src/courses/courses.controller.ts — thêm tạm</span>
-<pre><code><span class="cmt">// TẠM THỜI: để thấy lỗi không lường trước trông thế nào. Xoá sau khi thử.</span>
-<span class="kw">@Get</span>(<span class="str">'boom'</span>)
-<span class="fn">boom</span>(): <span class="kw">never</span> {
-  <span class="kw">throw new</span> <span class="fn">Error</span>(<span class="str">'Kết nối Postgres thất bại: password=SuperSecret123'</span>);
-}</code></pre>
+  <div class="callout danger">
+    <div class="ct">🛑 ĐỌC TRƯỚC KHI DÁN — vị trí đặt route quyết định nó có chạy hay không</div>
+    <p>
+      Nest khớp route <strong>theo thứ tự khai báo</strong>, <em>không</em> theo độ cụ thể. Nếu bạn dán
+      <code>@Get('boom')</code> xuống cuối class (theo thói quen), thì <code>@Get(':id')</code> ở trên
+      sẽ <strong>nuốt mất</strong> nó: <code>"boom"</code> bị nhận làm <code>id</code>,
+      <code>ParseIntPipe</code> thấy không phải số và trả:
+    </p>
+    <div class="code-block" style="margin-top:8px">
+      <span class="code-label">triệu chứng khi đặt SAI chỗ</span>
+<pre><code>{<span class="str">"message"</span>:<span class="str">"Validation failed (numeric string is expected)"</span>,
+ <span class="str">"error"</span>:<span class="str">"Bad Request"</span>,<span class="str">"statusCode"</span>:<span class="num">400</span>}</code></pre>
+    </div>
+    <p style="margin-top:10px; margin-bottom:0">
+      Hàm <code>boom()</code> lúc đó <strong>chưa chạy một lần nào</strong> — và không có lỗi nào báo cho
+      bạn biết route đã bị che. <strong>Quy tắc: route cụ thể luôn khai TRƯỚC route có tham số động.</strong>
+      Dán theo đúng khung dưới đây để khỏi sai.
+    </p>
   </div>
 
-  <div class="callout warn">
-    <div class="ct">⚠️ Vì sao phải đặt TRƯỚC <code>@Get(':id')</code></div>
+  <div class="code-block">
+    <span class="code-label">elearning-api/src/courses/courses.controller.ts — chèn vào GIỮA hai route sẵn có</span>
+<pre><code>  <span class="kw">@Get</span>()
+  <span class="fn">findAll</span>(<span class="kw">@Query</span>(<span class="str">'level'</span>) level?: <span class="kw">string</span>): Course[] {
+    <span class="kw">return this</span>.coursesService.<span class="fn">findAll</span>(level);
+  }
+
+  <span class="cmt">// ┌──────────────── CHÈN VÀO ĐÂY ────────────────┐</span>
+  <span class="cmt">// TẠM THỜI: để thấy lỗi không lường trước trông thế nào. Xoá sau khi thử.</span>
+  <span class="kw">@Get</span>(<span class="str">'boom'</span>)
+  <span class="fn">boom</span>(): <span class="kw">never</span> {
+    <span class="kw">throw new</span> <span class="fn">Error</span>(<span class="str">'Kết nối Postgres thất bại: password=SuperSecret123'</span>);
+  }
+  <span class="cmt">// └──────────────────────────────────────────────┘</span>
+
+  <span class="kw">@Get</span>(<span class="str">':id'</span>)                    <span class="cmt">// ← 'boom' PHẢI nằm trên dòng này</span>
+  <span class="fn">findOne</span>(<span class="kw">@Param</span>(<span class="str">'id'</span>, ParseIntPipe) id: <span class="kw">number</span>): Course {
+    <span class="kw">return this</span>.coursesService.<span class="fn">findOne</span>(id);
+  }</code></pre>
+  </div>
+
+  <div class="callout tip">
+    <div class="ct">🔎 Cách tự kiểm mà không cần đoán</div>
     <p style="margin-bottom:0">
-      Nest khớp route <strong>theo thứ tự khai báo</strong>. Đặt sau thì <code>/courses/boom</code> rơi
-      vào <code>@Get(':id')</code>, <code>ParseIntPipe</code> thấy <code>"boom"</code> không phải số và
-      trả <code>400</code> — bạn sẽ tưởng code hỏng. <strong>Route cụ thể luôn phải đứng trước route có
-      tham số động.</strong> Đây là lỗi định tuyến kinh điển, gặp một lần là nhớ đời.
+      Bảng route lúc khởi động in <strong>đúng thứ tự Nest sẽ khớp</strong>. Nếu thấy
+      <code>Mapped {/courses/:id, GET}</code> đứng <em>trên</em> <code>Mapped {/courses/boom, GET}</code>
+      thì bạn đã đặt sai — nhìn bảng là biết, khỏi cần gọi thử.
     </p>
   </div>
 
