@@ -89,9 +89,9 @@ Cách đếm: số file trong `reference/` so với số bài trong `lessons/`.
 | Mốc | Trạng thái |
 |---|---|
 | Bài đã soạn | 11 (Bài 00 → Bài 10) |
-| Cheat-sheet đã có | 2 — `docker-lenh-thiet-yeu.html` (Module 0) · **`node-va-nestjs-tra-nhanh.html`** (gom Bài 01→06, soạn 2026-08-25) |
-| Số bài KỂ TỪ cheat-sheet gần nhất | **4** (Bài 07, 08, 09, 10) |
-| **Trigger kế tiếp** | 🔴 **Module 2 XONG ở Bài 09** → tới ngưỡng. Cheat-sheet kế: *NestJS thực chiến* (Module/DI, pipe, filter, config, middleware, AsyncLocalStorage). Soạn khi Tuấn học xong Bài 10, TRƯỚC khi vào Module 3. Nhớ gồm cả pino/redact. |
+| Cheat-sheet đã có | 3 — `docker-lenh-thiet-yeu.html` (Module 0) · `node-va-nestjs-tra-nhanh.html` (Bài 01→06) · **`nestjs-thuc-chien-tra-nhanh.html`** (Bài 05→10, soạn 2026-08-27 khi Module 2 xong) |
+| Số bài KỂ TỪ cheat-sheet gần nhất | **0** — vừa reset |
+| **Trigger kế tiếp** | Bài 15 (đủ 5 bài kể từ cheat-sheet gần nhất), hoặc khi Module 3 xong — cái nào tới trước. Nội dung dự kiến: *Postgres + Prisma thực chiến*. |
 
 ## Việc cần làm / theo dõi
 

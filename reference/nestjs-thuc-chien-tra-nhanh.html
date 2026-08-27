@@ -1,0 +1,343 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Cheat-sheet · NestJS thực chiến (Module 2)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../lessons/lesson.css">
+</head>
+<body>
+<div class="wrap">
+
+  <span class="lesson-tag">📄 Cheat-sheet · gom Bài 05 → 10</span>
+  <h1>NestJS thực chiến — bản tra nhanh</h1>
+  <p class="subtitle">Toàn bộ Module 2 cô lại một trang: kiến trúc, DI, pipe, filter, config, log. In ra dán cạnh màn hình.</p>
+  <p class="meta-line">🖨 In được (Cmd+P) · Đã chạy thật: NestJS 11.0.1 · class-validator 0.15.1 · @nestjs/config 4.0.4 · nestjs-pino 4.6.1 · pino 10.3.1</p>
+
+  <div class="callout bridge">
+    <div class="ct">🌉 Một câu tóm cả Module 2</div>
+    <p style="margin-bottom:0">
+      Nest cho bạn <strong>bốn cái chốt</strong> để cắm code vào đúng chỗ trong vòng đời một request:
+      <strong>middleware</strong> (trước mọi thứ) → <strong>pipe</strong> (lọc dữ liệu vào) →
+      <strong>controller/service</strong> (làm việc) → <strong>filter</strong> (dọn khi hỏng).
+      Học Nest thực chất là học <em>việc nào cắm vào chốt nào</em>.
+    </p>
+  </div>
+
+  <h2>1. Vòng đời một request — cắm vào đâu</h2>
+
+  <div class="code-block">
+    <span class="code-label">thứ tự chạy thật</span>
+<pre><code>Request tới
+   │
+   ▼
+[ Middleware ]        ← sinh request-id (Bài 09) · chạy TRƯỚC mọi thứ, biết req/res thô
+   │
+   ▼
+[ Guard ]             ← "có được vào không?" (auth — Module 4)
+   │
+   ▼
+[ Pipe ]              ← ép kiểu + validate (Bài 06) · dữ liệu bẩn CHẾT Ở ĐÂY
+   │
+   ▼
+[ Controller ]        ← lấy dữ liệu ra khỏi HTTP
+   │
+   ▼
+[ Service ]           ← nghiệp vụ · KHÔNG biết gì về HTTP
+   │
+   ├── ổn  ──────────▶ response
+   └── ném exception ─▶ [ Filter ] ← dọn dẹp, chuẩn hoá lỗi (Bài 07)</code></pre>
+  </div>
+
+  <h2>2. Bốn file cho một nhóm tính năng</h2>
+
+  <table class="data">
+    <thead><tr><th>File</th><th>Trả lời câu hỏi</th><th>Dấu hiệu viết ĐÚNG</th></tr></thead>
+    <tbody>
+      <tr><td><code>*.module.ts</code></td><td>Nhóm này gồm những gì?</td><td>chỉ khai báo, không có logic</td></tr>
+      <tr><td><code>*.controller.ts</code></td><td>Request nào gọi hàm nào?</td><td>mỗi hàm 1–3 dòng, chỉ gọi service</td></tr>
+      <tr><td><code>*.service.ts</code></td><td>Nghiệp vụ làm gì?</td><td><span class="nullcell">không một chữ nào về HTTP</span></td></tr>
+      <tr><td><code>dto/*.dto.ts</code></td><td>Dữ liệu nào được phép vào?</td><td>là <strong>class</strong>, không phải interface</td></tr>
+    </tbody>
+  </table>
+
+  <div class="code-block">
+    <span class="code-label">khung tối thiểu</span>
+<pre><code><span class="cmt">// courses.module.ts</span>
+<span class="kw">@Module</span>({
+  controllers: [CoursesController],
+  providers: [CoursesService],   <span class="cmt">// những thứ Nest ĐƯỢC PHÉP tạo &amp; tiêm</span>
+  exports: [CoursesService],     <span class="cmt">// thêm dòng này nếu module KHÁC cần dùng</span>
+})
+
+<span class="cmt">// app.module.ts — phải khai báo nhóm mới ở đây, không là route không tồn tại</span>
+<span class="kw">@Module</span>({ imports: [CoursesModule] })</code></pre>
+  </div>
+
+  <h2>3. Dependency Injection trong 20 giây</h2>
+
+  <div class="code-block">
+    <span class="code-label">bạn khai báo mình CẦN gì, không tự đi lấy</span>
+<pre><code><span class="kw">@Injectable</span>()                            <span class="cmt">// đánh dấu: class này tiêm được</span>
+<span class="kw">export class</span> CoursesService { }
+
+<span class="kw">export class</span> CoursesController {
+  <span class="cmt">// Nest đọc constructor -&gt; thấy cần CoursesService -&gt; tự tạo &amp; đưa vào.</span>
+  <span class="cmt">// Ta KHÔNG hề gọi `new`.</span>
+  <span class="fn">constructor</span>(<span class="kw">private readonly</span> coursesService: CoursesService) {}
+}</code></pre>
+  </div>
+
+  <table class="data">
+    <thead><tr><th>Được gì</th><th>Cụ thể</th></tr></thead>
+    <tbody>
+      <tr><td>Một thể hiện dùng chung</td><td>quan trọng khi service giữ kết nối database</td></tr>
+      <tr><td>Thay được lúc test</td><td>đưa service giả vào, không cần database</td></tr>
+      <tr><td>Đổi ruột không đổi vỏ</td><td>mảng → Postgres, controller không sửa một chữ</td></tr>
+    </tbody>
+  </table>
+
+  <h2>4. Decorator hay dùng</h2>
+
+  <table class="data">
+    <thead><tr><th>Decorator</th><th>Lấy gì</th><th>Node thuần tương đương</th></tr></thead>
+    <tbody>
+      <tr><td><code>@Controller('courses')</code></td><td>tiền tố đường dẫn</td><td><code>pathname.startsWith('/courses')</code></td></tr>
+      <tr><td><code>@Get()</code> <code>@Post()</code> <code>@Patch()</code> <code>@Delete()</code></td><td>method + path con</td><td><code>request.method === 'GET'</code></td></tr>
+      <tr><td><code>@Param('id')</code></td><td>phần động của path</td><td>tự cắt chuỗi</td></tr>
+      <tr><td><code>@Query('level')</code></td><td>query string</td><td><code>url.searchParams.get()</code></td></tr>
+      <tr><td><code>@Body()</code></td><td>body đã parse</td><td><code>for await</code> + <code>JSON.parse</code></td></tr>
+      <tr><td><code>@HttpCode(204)</code></td><td>đổi status mặc định</td><td><code>writeHead(204)</code></td></tr>
+    </tbody>
+  </table>
+
+  <div class="callout danger">
+    <div class="ct">🚨 Bẫy định tuyến — gặp một lần là nhớ đời</div>
+    <p style="margin-bottom:0">
+      Nest khớp route <strong>theo THỨ TỰ KHAI BÁO</strong>, không theo độ cụ thể.
+      Đặt <code>@Get(':id')</code> trước <code>@Get('boom')</code> thì <code>:id</code> nuốt luôn
+      <code>'boom'</code> → <code>ParseIntPipe</code> trả <code>400</code>, và hàm kia
+      <em>không bao giờ chạy</em> mà chẳng có lỗi nào báo.
+      <br><br>
+      <strong>Luật: route cụ thể luôn khai TRƯỚC route có tham số động.</strong>
+      Cách tự kiểm: bảng route lúc khởi động in đúng thứ tự Nest sẽ khớp — nhìn là biết.
+    </p>
+  </div>
+
+  <h2>5. Validation — chặn ở biên</h2>
+
+  <div class="code-block">
+    <span class="code-label">npm i class-validator class-transformer</span>
+<pre><code><span class="cmt">// dto/create-course.dto.ts — CLASS (interface không mang được decorator)</span>
+<span class="kw">export class</span> CreateCourseDto {
+  <span class="cmt">// Dấu ! = giá trị do pipe đổ vào lúc chạy, không gán trong code.</span>
+  <span class="kw">@IsString</span>({ message: <span class="str">'title must be a string'</span> })
+  <span class="kw">@MinLength</span>(<span class="num">3</span>)                    title!: <span class="kw">string</span>;
+
+  <span class="kw">@IsIn</span>([<span class="str">'beginner'</span>, <span class="str">'advanced'</span>])   level!: <span class="kw">string</span>;
+  <span class="kw">@IsInt</span>() <span class="kw">@Min</span>(<span class="num">0</span>)                price!: <span class="kw">number</span>;
+}
+
+<span class="cmt">// main.ts — bật MỘT LẦN, áp cho mọi route kể cả route viết sau</span>
+app.<span class="fn">useGlobalPipes</span>(<span class="kw">new</span> <span class="fn">ValidationPipe</span>({
+  whitelist: <span class="kw">true</span>,             <span class="cmt">// cắt trường không khai báo</span>
+  forbidNonWhitelisted: <span class="kw">true</span>,  <span class="cmt">// có trường lạ → 400 luôn</span>
+  transform: <span class="kw">true</span>,             <span class="cmt">// JSON thô → thể hiện class</span>
+}));</code></pre>
+  </div>
+
+  <table class="data">
+    <thead><tr><th>Decorator</th><th>Kiểm gì</th></tr></thead>
+    <tbody>
+      <tr><td><code>@IsString</code> <code>@IsInt</code> <code>@IsNumber</code> <code>@IsBoolean</code></td><td>kiểu cơ bản</td></tr>
+      <tr><td><code>@MinLength(n)</code> <code>@MaxLength(n)</code></td><td>độ dài chuỗi</td></tr>
+      <tr><td><code>@Min(n)</code> <code>@Max(n)</code></td><td>khoảng giá trị số</td></tr>
+      <tr><td><code>@IsIn([...])</code> <code>@IsEnum(E)</code></td><td>chỉ nhận giá trị liệt kê</td></tr>
+      <tr><td><code>@IsEmail</code> <code>@IsUrl</code> <code>@IsUUID</code></td><td>định dạng</td></tr>
+      <tr><td><code>@IsOptional()</code></td><td>vắng mặt thì bỏ qua các kiểm tra khác</td></tr>
+      <tr><td><code>@Transform(({value}) =&gt; value?.trim())</code></td><td>xử lý TRƯỚC khi kiểm (cắt khoảng trắng)</td></tr>
+    </tbody>
+  </table>
+
+  <div class="callout warn">
+    <div class="ct">⚠️ Hai điều dễ quên</div>
+    <p style="margin-bottom:0">
+      <strong>1.</strong> <code>@MinLength(3)</code> đếm ký tự, <em>không trim</em> — chuỗi
+      <code>"&nbsp;&nbsp;&nbsp;"</code> vẫn lọt. Thêm <code>@Transform</code> để cắt trước.<br>
+      <strong>2.</strong> <code>whitelist</code> không phải tuỳ chọn cho vui — không bật thì client gửi
+      kèm <code>{"isAdmin":true}</code> sẽ lọt vào <code>{...dto}</code> và được lưu. Đó là lỗ hổng
+      <em>mass assignment</em>. Nguyên tắc: <strong>liệt kê thứ ĐƯỢC PHÉP, đừng liệt kê thứ bị cấm.</strong>
+    </p>
+  </div>
+
+  <h2>6. Ném lỗi đúng cách</h2>
+
+  <div class="code-block">
+    <span class="code-label">chỉ cần throw — Nest lo phần còn lại, tiến trình KHÔNG chết</span>
+<pre><code><span class="kw">throw new</span> <span class="fn">BadRequestException</span>(<span class="str">'...'</span>);      <span class="cmt">// 400</span>
+<span class="kw">throw new</span> <span class="fn">UnauthorizedException</span>();          <span class="cmt">// 401 — bạn là ai?</span>
+<span class="kw">throw new</span> <span class="fn">ForbiddenException</span>();             <span class="cmt">// 403 — biết rồi, vẫn không cho</span>
+<span class="kw">throw new</span> <span class="fn">NotFoundException</span>(<span class="str">'...'</span>);         <span class="cmt">// 404</span>
+<span class="kw">throw new</span> <span class="fn">ConflictException</span>(<span class="str">'...'</span>);         <span class="cmt">// 409 — trùng dữ liệu</span>
+<span class="kw">throw new</span> <span class="fn">UnprocessableEntityException</span>();   <span class="cmt">// 422</span></code></pre>
+  </div>
+
+  <div class="code-block">
+    <span class="code-label">filter chuẩn hoá — ý chính</span>
+<pre><code><span class="kw">@Catch</span>()   <span class="cmt">// để trống = bắt MỌI thứ, kể cả Error thường</span>
+<span class="kw">export class</span> AllExceptionsFilter <span class="kw">implements</span> ExceptionFilter {
+  <span class="fn">catch</span>(exception: <span class="kw">unknown</span>, host: ArgumentsHost) {
+    <span class="cmt">// host = hộp ngữ cảnh chung (Nest còn chạy WS/gRPC), mở đúng ngăn HTTP:</span>
+    <span class="kw">const</span> ctx = host.<span class="fn">switchToHttp</span>();
+
+    <span class="cmt">// Chia đôi thế giới lỗi — quyết định quan trọng nhất:</span>
+    <span class="cmt">//   HttpException = CÓ CHỦ Ý  -&gt; nói thật cho client</span>
+    <span class="cmt">//   còn lại       = TAI NẠN   -&gt; giấu chi tiết, chỉ ghi log</span>
+    <span class="kw">const</span> isHttpException = exception <span class="kw">instanceof</span> HttpException;
+  }
+}
+
+<span class="cmt">// main.ts</span>
+app.<span class="fn">useGlobalFilters</span>(<span class="kw">new</span> <span class="fn">AllExceptionsFilter</span>());</code></pre>
+  </div>
+
+  <div class="callout danger">
+    <div class="ct">🚨 Luật vàng về lỗi</div>
+    <p style="margin-bottom:0">
+      <strong><code>4xx</code> nói thật — <code>5xx</code> giấu kín.</strong><br>
+      Lỗi client thì PHẢI nói rõ để họ sửa. Lỗi của mình thì chỉ trả "Internal server error", còn
+      chi tiết ghi vào log — message mặc định của thư viện hay chứa tên bảng, đường dẫn file, chuỗi
+      kết nối: bản đồ hệ thống trao tận tay kẻ tấn công.
+      <br><br>
+      <em>Log cho MÌNH (đầy đủ) · Response cho NGƯỜI LẠ (chung chung).</em>
+    </p>
+  </div>
+
+  <h2>7. Config — fail fast</h2>
+
+  <div class="code-block">
+    <span class="code-label">npm i @nestjs/config</span>
+<pre><code><span class="cmt">// app.module.ts</span>
+<span class="fn">ConfigModule.forRoot</span>({
+  isGlobal: <span class="kw">true</span>,          <span class="cmt">// khỏi import lại ở từng module</span>
+  validate: validateEnv,   <span class="cmt">// TRUYỀN HÀM, không gọi nó (đừng viết validateEnv())</span>
+}),
+
+<span class="cmt">// đọc ở nơi khác</span>
+<span class="kw">const</span> port = config.<span class="fn">get</span>&lt;<span class="kw">number</span>&gt;(<span class="str">'PORT'</span>, <span class="num">3333</span>);
+
+<span class="cmt">// env.validation.ts — dùng LẠI class-validator</span>
+<span class="fn">plainToInstance</span>(EnvironmentVariables, config, {
+  enableImplicitConversion: <span class="kw">true</span>,   <span class="cmt">// '3333' -&gt; 3333 (env LUÔN là chuỗi!)</span>
+});
+<span class="fn">validateSync</span>(parsed, { skipMissingProperties: <span class="kw">false</span> });  <span class="cmt">// thiếu = lỗi</span></code></pre>
+  </div>
+
+  <table class="data">
+    <thead><tr><th>Nguyên tắc</th><th>Vì sao</th></tr></thead>
+    <tbody>
+      <tr><td>Cấu hình sai → <strong>không khởi động</strong>, <code>exit=1</code></td><td>Docker/K8s/CI nhìn mã thoát để tự dừng rollout</td></tr>
+      <tr><td>Đừng viết <code>process.env.X ?? ''</code></td><td>ký JWT bằng chuỗi rỗng = ai cũng giả mạo được token, <span class="nullcell">không lỗi nào báo</span></td></tr>
+      <tr><td><code>.env</code> KHÔNG lên git · <code>.env.example</code> thì CÓ</td><td>kiểm: <code>git check-ignore -v .env</code></td></tr>
+    </tbody>
+  </table>
+
+  <h2>8. Log &amp; truy vết</h2>
+
+  <div class="code-block">
+    <span class="code-label">npm i nestjs-pino pino pino-http · npm i -D pino-pretty</span>
+<pre><code><span class="fn">LoggerModule.forRoot</span>({
+  pinoHttp: {
+    <span class="cmt">// Tôn trọng id hệ thống phía trước gửi tới -&gt; nối được xuyên nhiều dịch vụ</span>
+    genReqId: (req, res) => { <span class="cmt">/* đọc x-request-id, không có thì randomUUID */</span> },
+
+    <span class="cmt">// CHE secret — theo TÊN TRƯỜNG</span>
+    redact: { paths: [<span class="str">'req.headers.authorization'</span>, <span class="str">'*.password'</span>], censor: <span class="str">'[DA CHE]'</span> },
+
+    <span class="cmt">// dev in đẹp cho người · production JSON cho máy</span>
+    transport: process.env.NODE_ENV === <span class="str">'development'</span>
+      ? { target: <span class="str">'pino-pretty'</span>, options: { <span class="cmt">/* ... */</span> } }
+      : <span class="kw">undefined</span>,
+  },
+}),
+
+<span class="cmt">// main.ts</span>
+app.<span class="fn">useLogger</span>(app.<span class="fn">get</span>(PinoNestLogger));
+
+<span class="cmt">// dùng trong service — mỗi class một logger đặt tên theo chính nó</span>
+<span class="kw">private readonly</span> logger = <span class="kw">new</span> <span class="fn">Logger</span>(CoursesService.name);
+<span class="kw">this</span>.logger.<span class="fn">log</span>({ user });   <span class="cmt">// log OBJECT, đừng ghép chuỗi tay</span></code></pre>
+  </div>
+
+  <table class="data">
+    <thead><tr><th>level</th><th>10 trace · 20 debug · 30 info · 40 warn · 50 error · 60 fatal</th></tr></thead>
+    <tbody>
+      <tr><td>Vì sao là số</td><td>so sánh được: "mọi thứ nghiêm trọng hơn cảnh báo" = <code>level &gt;= 50</code></td></tr>
+      <tr><td>Giới hạn <code>redact</code></td><td>che theo <strong>tên trường</strong> — đặt <code>pwd</code> là lọt; ghép chuỗi tay cũng lọt</td></tr>
+      <tr><td>Vì sao log object</td><td>redact mới có chỗ bám, và máy mới lọc/gom nhóm được</td></tr>
+    </tbody>
+  </table>
+
+  <h2>9. Lỗi hay gặp — tra nhanh</h2>
+
+  <table class="data">
+    <thead><tr><th>Thông báo / triệu chứng</th><th>Nghĩa</th><th>Sửa</th></tr></thead>
+    <tbody>
+      <tr><td><code>Nest can't resolve dependencies of X (?)</code></td><td>dấu <code>?</code> = tham số nó không tìm ra</td><td>thêm vào <code>providers</code>, hoặc <code>exports</code> ở module chứa nó</td></tr>
+      <tr><td>Route không có trong bảng lúc khởi động</td><td>lỗi <em>khai báo</em>, không phải lỗi logic</td><td>kiểm <code>imports</code> của <code>AppModule</code> + <code>controllers</code></td></tr>
+      <tr><td>Route có trong bảng nhưng trả <code>400</code> lạ</td><td>bị route <code>:id</code> khai trước nuốt mất</td><td>chuyển route cụ thể lên TRƯỚC</td></tr>
+      <tr><td><code>TS1272 ... must be imported with 'import type'</code></td><td><em>interface</em> dùng làm kiểu trong signature có decorator</td><td>thêm <code>type</code>: <code>import type { Course }</code></td></tr>
+      <tr><td>Validation im lặng không chạy</td><td>lỡ dùng <code>import type</code> cho <em>DTO class</em></td><td><span class="nullcell">bỏ chữ <code>type</code></span> — class phải sống lúc chạy</td></tr>
+      <tr><td>App không lên, <code>exit=1</code>, "Cấu hình không hợp lệ"</td><td>đúng ý đồ — fail fast</td><td>sửa <code>.env</code> theo danh sách nó in ra</td></tr>
+      <tr><td>Log production ra dạng pretty</td><td><code>NODE_ENV</code> không đúng <code>'production'</code></td><td>kiểm <code>.env</code> — Bài 08 đã chặn gõ nhầm</td></tr>
+    </tbody>
+  </table>
+
+  <h2>10. Lệnh thử API hay dùng</h2>
+
+  <div class="code-block">
+    <span class="code-label">bash</span>
+<pre><code><span class="cmt"># Xem cả header lẫn body</span>
+curl -si http://localhost:3333/courses
+
+<span class="cmt"># Chỉ lấy status code</span>
+curl -s -o /dev/null -w <span class="str">'%{http_code}\n'</span> http://localhost:3333/courses/99
+
+<span class="cmt"># POST JSON</span>
+curl -s -X POST http://localhost:3333/courses \
+  -H <span class="str">'Content-Type: application/json'</span> \
+  -d <span class="str">'{"title":"abc","level":"beginner","price":100}'</span>
+
+<span class="cmt"># Gửi kèm request-id để tự truy vết trong log</span>
+curl -s -H <span class="str">'x-request-id: dang-tim-bug'</span> http://localhost:3333/courses/99
+
+<span class="cmt"># Bắn nhiều request ĐỒNG THỜI</span>
+<span class="fn">seq</span> <span class="num">5</span> | xargs -P<span class="num">5</span> -I{} curl -s -o /dev/null http://localhost:3333/courses
+
+<span class="cmt"># Kiểm .env có bị git bỏ qua không (LÀM TRƯỚC KHI COMMIT)</span>
+git check-ignore -v elearning-api/.env</code></pre>
+  </div>
+
+  <h2>Nguồn chính chủ</h2>
+  <p class="meta-line">
+    <a href="https://docs.nestjs.com/" target="_blank">NestJS docs</a> ·
+    <a href="https://docs.nestjs.com/techniques/validation" target="_blank">Validation</a> ·
+    <a href="https://docs.nestjs.com/exception-filters" target="_blank">Exception filters</a> ·
+    <a href="https://docs.nestjs.com/techniques/configuration" target="_blank">Configuration</a> ·
+    <a href="https://12factor.net/config" target="_blank">12-factor III: Config</a> ·
+    <a href="https://getpino.io/" target="_blank">Pino</a> ·
+    <a href="https://github.com/iamolegga/nestjs-pino" target="_blank">nestjs-pino</a>
+  </p>
+
+  <div class="navbar">
+    <a href="../lessons/0010-pino-log-json.html">← Bài 10</a>
+    <a href="../lessons/index.html">🏠 Mục lục</a>
+    <a class="disabled">Module 3 →</a>
+  </div>
+
+</div>
+<script src="../lessons/lesson-enhance.js"></script>
+</body>
+</html>
