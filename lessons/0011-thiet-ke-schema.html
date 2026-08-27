@@ -1,0 +1,445 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Bài 11 · Thiết kế schema e-learning: cái gì được đổi, cái gì phải bất biến</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="lesson.css">
+</head>
+<body>
+<div class="wrap">
+
+  <span class="lesson-tag">Module 3 · Bài 11</span>
+  <h1>Thiết kế schema e-learning: cái gì được đổi, cái gì phải bất biến</h1>
+  <p class="subtitle">Vẽ bảng cho đủ là phần dễ. Phần khó — và phần tốn tiền nếu sai — là biết dữ liệu nào không bao giờ được phép thay đổi.</p>
+  <p class="meta-line">⏱ ~40 phút · 🎯 Sản phẩm: 6 bảng thật trong Postgres của bạn, và một thí nghiệm chứng minh hoá đơn cũ <em>không</em> đổi khi bạn giảm giá.</p>
+
+  <div class="callout bridge">
+    <div class="ct">🌉 Bắc cầu — bạn đã trả lời một nửa rồi</div>
+    <p>
+      Tôi hỏi: <em>giá tiền lưu ở đâu?</em> Bạn trả lời <strong>"lưu ở khoá học"</strong>. Đúng — nhưng
+      chỉ đúng một nửa, và nửa còn lại là chỗ mất tiền thật.
+    </p>
+    <p style="margin-bottom:0">
+      Bài này bắt đầu từ chính chỗ đó. Vì <strong>schema là quyết định khó sửa nhất trong cả hệ thống</strong>:
+      code viết sai thì sửa rồi deploy lại; schema thiết kế sai thì tới lúc phát hiện, dữ liệu cần thiết
+      <em>chưa từng được ghi</em> — không có gì để phục hồi.
+    </p>
+  </div>
+
+  <h2>1. Tìm thực thể: đọc nghiệp vụ, khoanh danh từ</h2>
+
+  <p>
+    Cách bắt đầu đơn giản nhất: viết nghiệp vụ ra bằng tiếng Việt, rồi khoanh các <strong>danh từ</strong>.
+  </p>
+
+  <div class="code-block">
+    <span class="code-label">nghiệp vụ e-learning</span>
+<pre><code>"Một NGƯỜI DÙNG đăng ký tài khoản, xem danh sách KHOÁ HỌC.
+ Mỗi khoá có nhiều BÀI HỌC.
+ Người dùng tạo ĐƠN HÀNG để mua một hoặc nhiều khoá.
+ Thanh toán xong thì được GHI DANH và học được."</code></pre>
+  </div>
+
+  <p>Sáu danh từ → sáu bảng. Nhưng chú ý hai cái cuối, chúng khác nhau về bản chất:</p>
+
+  <table class="data">
+    <thead><tr><th>Bảng</th><th>Là gì</th><th>Đổi theo thời gian?</th></tr></thead>
+    <tbody>
+      <tr><td><code>users</code></td><td>người có thật</td><td>có — đổi tên, đổi email</td></tr>
+      <tr><td><code>courses</code></td><td>thứ đang bán <em>hôm nay</em></td><td><strong>có</strong> — đổi giá, đổi tên</td></tr>
+      <tr><td><code>lessons</code></td><td>nội dung trong khoá</td><td>có</td></tr>
+      <tr><td><code>orders</code></td><td>một lần mua</td><td>chỉ đổi trạng thái</td></tr>
+      <tr><td><code>order_items</code></td><td><span class="nullcell">CHUYỆN ĐÃ XẢY RA</span></td><td><strong>KHÔNG BAO GIỜ</strong></td></tr>
+      <tr><td><code>enrollments</code></td><td>ai học được khoá nào</td><td>gần như không</td></tr>
+    </tbody>
+  </table>
+
+  <div class="callout why">
+    <div class="ct">💡 Hai loại dữ liệu — phân biệt được là nắm nửa bài này</div>
+    <p style="margin-bottom:0">
+      <strong>Dữ liệu TRẠNG THÁI</strong> mô tả <em>hiện tại đang thế nào</em>: giá khoá học hôm nay,
+      tên người dùng hôm nay. Sửa đè lên là đúng.
+      <br><br>
+      <strong>Dữ liệu SỰ KIỆN</strong> ghi lại <em>chuyện đã xảy ra lúc đó</em>: A trả 499.000 vào ngày
+      01/10. Quá khứ thì không sửa được — nên bảng ghi nó cũng <strong>không được phép đổi</strong>.
+      <br><br>
+      Gần như mọi bug dữ liệu nghiêm trọng trong hệ thống thanh toán đều đến từ việc lẫn lộn hai loại này.
+    </p>
+  </div>
+
+  <h2>2. Ba kiểu quan hệ, và khoá ngoại sống ở đâu</h2>
+
+  <table class="data">
+    <thead><tr><th>Kiểu</th><th>Ví dụ</th><th>Khoá ngoại đặt ở đâu</th></tr></thead>
+    <tbody>
+      <tr><td><strong>1 — n</strong></td><td>1 khoá có n bài học</td><td>bên "<strong>nhiều</strong>": <code>lessons.course_id</code></td></tr>
+      <tr><td><strong>n — n</strong></td><td>n học viên ↔ n khoá</td><td>bảng thứ ba: <code>enrollments</code></td></tr>
+      <tr><td><strong>1 — 1</strong></td><td>user ↔ hồ sơ chi tiết</td><td>bên nào cũng được (hiếm dùng)</td></tr>
+    </tbody>
+  </table>
+
+  <div class="callout why">
+    <div class="ct">💡 Vì sao khoá ngoại luôn nằm bên "nhiều"</div>
+    <p style="margin-bottom:0">
+      Thử làm ngược xem: để <code>courses</code> giữ danh sách bài học thì phải nhét nhiều giá trị vào
+      <em>một ô</em> — mà một ô chỉ chứa được một giá trị. Còn để ở <code>lessons.course_id</code> thì mỗi
+      bài học chỉ cần trỏ về đúng một khoá. <strong>Bên "nhiều" giữ khoá vì mỗi dòng của nó chỉ thuộc về
+      một cha.</strong> Đó cũng là lý do quan hệ n–n bắt buộc phải có bảng thứ ba: cả hai bên đều "nhiều",
+      không bên nào nhét vừa.
+    </p>
+  </div>
+
+  <h2>3. Viết schema thật</h2>
+
+  <p>
+    Ta viết bằng <strong>SQL thuần</strong>, chạy thẳng vào Postgres. Prisma sẽ tới ở bài sau — nhưng
+    giống như Module 1 với <code>node:http</code>, thấy tận mắt tầng dưới rồi thì lát nữa Prisma chỉ là
+    lớp tiện nghi, không phải hộp đen.
+  </p>
+
+  <p>Tạo file <code>elearning-api/db/schema.sql</code>:</p>
+
+  <div class="code-block">
+    <span class="code-label">bash</span>
+<pre><code><span class="kw">cd</span> ~/Documents/youtube/fullstack/elearning-api
+<span class="fn">mkdir</span> -p db</code></pre>
+  </div>
+
+  <div class="code-block">
+    <span class="code-label">elearning-api/db/schema.sql</span>
+<pre><code><span class="cmt">-- ══════════════════ NGƯỜI DÙNG ══════════════════</span>
+<span class="kw">CREATE TABLE</span> <span class="tbl">users</span> (
+  <span class="cmt">-- GENERATED ALWAYS AS IDENTITY: Postgres tự cấp id, và CẤM ta tự gán.</span>
+  <span class="cmt">-- Cấm là có chủ ý — tự gán tay là nguồn gốc của id trùng.</span>
+  id         <span class="kw">BIGINT</span>      <span class="kw">GENERATED ALWAYS AS IDENTITY PRIMARY KEY</span>,
+  email      <span class="kw">TEXT</span>        <span class="kw">NOT NULL UNIQUE</span>,
+  full_name  <span class="kw">TEXT</span>        <span class="kw">NOT NULL</span>,
+  <span class="cmt">-- TIMESTAMPTZ (có múi giờ), KHÔNG dùng TIMESTAMP trần.</span>
+  <span class="cmt">-- Server ở Singapore, khách ở VN — thiếu múi giờ là lệch 1 tiếng, âm thầm.</span>
+  created_at <span class="kw">TIMESTAMPTZ</span> <span class="kw">NOT NULL DEFAULT</span> <span class="fn">now</span>()
+);
+
+<span class="cmt">-- ══════════════════ KHOÁ HỌC ══════════════════</span>
+<span class="kw">CREATE TABLE</span> <span class="tbl">courses</span> (
+  id            <span class="kw">BIGINT</span> <span class="kw">GENERATED ALWAYS AS IDENTITY PRIMARY KEY</span>,
+  title         <span class="kw">TEXT</span>   <span class="kw">NOT NULL</span>,
+  <span class="cmt">-- CHECK = ràng buộc sống trong DATABASE, không phải trong code.</span>
+  <span class="cmt">-- Ai ghi thẳng bằng psql cũng bị chặn — DTO ở Bài 06 không làm được điều đó.</span>
+  level         <span class="kw">TEXT</span>   <span class="kw">NOT NULL CHECK</span> (level <span class="kw">IN</span> (<span class="str">'beginner'</span>, <span class="str">'advanced'</span>)),
+  <span class="cmt">-- Tên là current_price chứ không phải price: nói rõ đây là giá HÔM NAY.</span>
+  <span class="cmt">-- NUMERIC cho tiền, tuyệt đối không dùng float (xem cảnh báo bên dưới).</span>
+  current_price <span class="kw">NUMERIC</span>(<span class="num">12</span>,<span class="num">0</span>) <span class="kw">NOT NULL CHECK</span> (current_price &gt;= <span class="num">0</span>),
+  created_at    <span class="kw">TIMESTAMPTZ</span> <span class="kw">NOT NULL DEFAULT</span> <span class="fn">now</span>()
+);
+
+<span class="cmt">-- ══════════════════ BÀI HỌC (1 khoá — n bài) ══════════════════</span>
+<span class="kw">CREATE TABLE</span> <span class="tbl">lessons</span> (
+  id        <span class="kw">BIGINT</span> <span class="kw">GENERATED ALWAYS AS IDENTITY PRIMARY KEY</span>,
+  <span class="cmt">-- ON DELETE CASCADE: xoá khoá thì bài học trong đó đi theo.</span>
+  <span class="cmt">-- Hợp lý vì bài học KHÔNG tồn tại độc lập với khoá.</span>
+  course_id <span class="kw">BIGINT</span> <span class="kw">NOT NULL REFERENCES</span> <span class="tbl">courses</span>(id) <span class="kw">ON DELETE CASCADE</span>,
+  title     <span class="kw">TEXT</span>   <span class="kw">NOT NULL</span>,
+  position  <span class="kw">INT</span>    <span class="kw">NOT NULL</span>,
+  <span class="cmt">-- Trong CÙNG một khoá không được có hai bài cùng vị trí.</span>
+  <span class="kw">UNIQUE</span> (course_id, position)
+);
+
+<span class="cmt">-- ══════════════════ ĐƠN HÀNG (1 user — n đơn) ══════════════════</span>
+<span class="kw">CREATE TABLE</span> <span class="tbl">orders</span> (
+  id          <span class="kw">BIGINT</span> <span class="kw">GENERATED ALWAYS AS IDENTITY PRIMARY KEY</span>,
+  <span class="cmt">-- ON DELETE RESTRICT: CẤM xoá user còn đơn hàng.</span>
+  <span class="cmt">-- Sổ sách kế toán không được phép bốc hơi vì ai đó bấm nhầm nút xoá.</span>
+  user_id     <span class="kw">BIGINT</span> <span class="kw">NOT NULL REFERENCES</span> <span class="tbl">users</span>(id) <span class="kw">ON DELETE RESTRICT</span>,
+  status      <span class="kw">TEXT</span>   <span class="kw">NOT NULL CHECK</span> (status <span class="kw">IN</span> (<span class="str">'pending'</span>,<span class="str">'paid'</span>,<span class="str">'refunded'</span>)),
+  total_price <span class="kw">NUMERIC</span>(<span class="num">12</span>,<span class="num">0</span>) <span class="kw">NOT NULL CHECK</span> (total_price &gt;= <span class="num">0</span>),
+  created_at  <span class="kw">TIMESTAMPTZ</span> <span class="kw">NOT NULL DEFAULT</span> <span class="fn">now</span>()
+);
+
+<span class="cmt">-- ═══════════ DÒNG ĐƠN HÀNG — ĐÂY LÀ CHỖ CHỤP ẢNH ═══════════</span>
+<span class="kw">CREATE TABLE</span> <span class="tbl">order_items</span> (
+  id           <span class="kw">BIGINT</span> <span class="kw">GENERATED ALWAYS AS IDENTITY PRIMARY KEY</span>,
+  order_id     <span class="kw">BIGINT</span> <span class="kw">NOT NULL REFERENCES</span> <span class="tbl">orders</span>(id) <span class="kw">ON DELETE CASCADE</span>,
+  course_id    <span class="kw">BIGINT</span> <span class="kw">NOT NULL REFERENCES</span> <span class="tbl">courses</span>(id) <span class="kw">ON DELETE RESTRICT</span>,
+  <span class="cmt">-- HAI DÒNG DƯỚI LÀ TRỌNG TÂM CẢ BÀI.</span>
+  <span class="cmt">-- Chúng SAO CHÉP giá và tên tại thời điểm mua, thay vì trỏ sang courses.</span>
+  <span class="cmt">-- Trông như dữ liệu thừa — nhưng đây là dữ liệu KHÁC BẢN CHẤT, xem phần 5.</span>
+  course_title <span class="kw">TEXT</span>   <span class="kw">NOT NULL</span>,
+  unit_price   <span class="kw">NUMERIC</span>(<span class="num">12</span>,<span class="num">0</span>) <span class="kw">NOT NULL CHECK</span> (unit_price &gt;= <span class="num">0</span>),
+  <span class="cmt">-- Một đơn không được chứa cùng một khoá hai lần.</span>
+  <span class="kw">UNIQUE</span> (order_id, course_id)
+);
+
+<span class="cmt">-- ══════════════ GHI DANH (n — n) ══════════════</span>
+<span class="kw">CREATE TABLE</span> <span class="tbl">enrollments</span> (
+  id          <span class="kw">BIGINT</span> <span class="kw">GENERATED ALWAYS AS IDENTITY PRIMARY KEY</span>,
+  user_id     <span class="kw">BIGINT</span> <span class="kw">NOT NULL REFERENCES</span> <span class="tbl">users</span>(id) <span class="kw">ON DELETE CASCADE</span>,
+  course_id   <span class="kw">BIGINT</span> <span class="kw">NOT NULL REFERENCES</span> <span class="tbl">courses</span>(id) <span class="kw">ON DELETE RESTRICT</span>,
+  enrolled_at <span class="kw">TIMESTAMPTZ</span> <span class="kw">NOT NULL DEFAULT</span> <span class="fn">now</span>(),
+  <span class="cmt">-- Trái tim của bảng n-n: một người KHÔNG ghi danh hai lần cùng một khoá.</span>
+  <span class="cmt">-- Thiếu dòng này là bug "mua hai lần" mà code rất khó chặn cho kín.</span>
+  <span class="kw">UNIQUE</span> (user_id, course_id)
+);</code></pre>
+  </div>
+
+  <div class="callout danger">
+    <div class="ct">🚨 <code>NUMERIC</code> cho tiền — đừng bao giờ dùng <code>float</code></div>
+    <p>Chạy thử ngay trong Postgres của bạn:</p>
+    <div class="code-block" style="margin-top:8px">
+      <span class="code-label">kết quả THẬT trên Postgres 18.4</span>
+<pre><code><span class="kw">SELECT</span> (<span class="num">0.1</span>::<span class="kw">numeric</span> + <span class="num">0.2</span>::<span class="kw">numeric</span>), (<span class="num">0.1</span>::<span class="kw">float8</span> + <span class="num">0.2</span>::<span class="kw">float8</span>);
+
+  numeric →  <span class="num">0.3</span>
+  float   →  <span class="num">0.30000000000000004</span>   <span class="cmt">← sai từ chữ số thứ 17</span></code></pre>
+    </div>
+    <p style="margin-top:10px; margin-bottom:0">
+      Số lẻ nhỏ xíu, nhưng cộng qua hàng triệu giao dịch thì sổ sách <strong>không bao giờ khớp</strong>
+      với cổng thanh toán — và bạn sẽ mất nhiều ngày đi tìm "tiền thất thoát" không tồn tại.
+      <code>float</code> lưu xấp xỉ theo cơ số 2; <code>NUMERIC</code> lưu <em>chính xác</em> theo cơ số 10.
+      <strong>Tiền bạc không có chỗ cho xấp xỉ.</strong>
+    </p>
+  </div>
+
+  <h2>4. Nạp vào database thật</h2>
+
+  <div class="code-block">
+    <span class="code-label">bash — Postgres từ Bài 00 phải đang chạy</span>
+<pre><code><span class="cmt"># Kiểm container còn sống không</span>
+docker ps --filter name=elearning-postgres
+
+<span class="cmt"># Nạp schema (mật khẩu lấy từ docker-compose.yml của Bài 00)</span>
+<span class="kw">export</span> PGPASSWORD=elearning_dev_pw
+psql -h localhost -p <span class="num">5433</span> -U elearning -d elearning -f db/schema.sql</code></pre>
+  </div>
+
+  <div class="code-block">
+    <span class="code-label">phải thấy</span>
+<pre><code>CREATE TABLE
+CREATE TABLE
+CREATE TABLE
+CREATE TABLE
+CREATE TABLE
+CREATE TABLE</code></pre>
+  </div>
+
+  <div class="code-block">
+    <span class="code-label">bash — xem lại bảng vừa tạo</span>
+<pre><code>psql -h localhost -p <span class="num">5433</span> -U elearning -d elearning -c <span class="str">"\dt"</span></code></pre>
+  </div>
+
+  <div class="callout tip">
+    <div class="ct">🔎 Lỡ chạy hai lần thì sao?</div>
+    <p style="margin-bottom:0">
+      Lần hai sẽ báo <code>relation "users" already exists</code> — không hỏng gì cả, chỉ là đã có rồi.
+      Muốn làm lại từ đầu:
+      <code>DROP TABLE IF EXISTS enrollments, order_items, orders, lessons, courses, users CASCADE;</code>
+      Chú ý <strong>thứ tự ngược</strong>: bảng nào trỏ tới bảng khác thì phải xoá trước.
+    </p>
+  </div>
+
+  <h2>5. Thí nghiệm quyết định: giảm giá rồi xem hoá đơn cũ</h2>
+
+  <p>Đây là chỗ trả lời trọn vẹn câu hỏi mở đầu. Dựng một lần mua:</p>
+
+  <div class="code-block">
+    <span class="code-label">bash — dán cả khối vào psql</span>
+<pre><code>psql -h localhost -p <span class="num">5433</span> -U elearning -d elearning &lt;&lt;<span class="str">'SQL'</span>
+<span class="kw">INSERT INTO</span> <span class="tbl">users</span>(email,full_name) <span class="kw">VALUES</span> (<span class="str">'a@hv.vn'</span>,<span class="str">'Hoc Vien A'</span>);
+<span class="kw">INSERT INTO</span> <span class="tbl">courses</span>(title,level,current_price)
+  <span class="kw">VALUES</span> (<span class="str">'NestJS Fundamentals'</span>,<span class="str">'beginner'</span>,<span class="num">499000</span>);
+<span class="kw">INSERT INTO</span> <span class="tbl">orders</span>(user_id,status,total_price) <span class="kw">VALUES</span> (<span class="num">1</span>,<span class="str">'paid'</span>,<span class="num">499000</span>);
+
+<span class="cmt">-- CHỤP giá + tên tại thời điểm mua, thay vì chỉ trỏ tới courses</span>
+<span class="kw">INSERT INTO</span> <span class="tbl">order_items</span>(order_id,course_id,course_title,unit_price)
+  <span class="kw">SELECT</span> <span class="num">1</span>, id, title, current_price <span class="kw">FROM</span> <span class="tbl">courses</span> <span class="kw">WHERE</span> id=<span class="num">1</span>;
+
+<span class="kw">INSERT INTO</span> <span class="tbl">enrollments</span>(user_id,course_id) <span class="kw">VALUES</span> (<span class="num">1</span>,<span class="num">1</span>);
+SQL</code></pre>
+  </div>
+
+  <p>Giờ chạy sale — giảm giá và đổi luôn tên khoá:</p>
+
+  <div class="code-block">
+    <span class="code-label">bash</span>
+<pre><code>psql -h localhost -p <span class="num">5433</span> -U elearning -d elearning -c <span class="str">"
+UPDATE courses SET current_price=199000, title='NestJS Fundamentals 2027' WHERE id=1;"</span>
+
+<span class="cmt"># Hoá đơn cũ giờ ghi gì?</span>
+psql -h localhost -p <span class="num">5433</span> -U elearning -d elearning -c <span class="str">"
+SELECT course_title, unit_price FROM order_items WHERE order_id=1;"</span></code></pre>
+  </div>
+
+  <div class="code-block">
+    <span class="code-label">kết quả THẬT (đã chạy trên Postgres 18.4)</span>
+<pre><code>giá hiện tại của khoá : <span class="num">199000</span>
+tên hiện tại của khoá : NestJS Fundamentals 2027
+
+hoá đơn của học viên A: NestJS Fundamentals - <span class="num">499000</span> đ   <span class="cmt">← KHÔNG đổi</span>
+đã trả                : <span class="num">499000</span> đ
+
+tổng doanh thu        : <span class="num">499000</span> đ   <span class="cmt">← KHÔNG đổi dù giá đã giảm</span></code></pre>
+  </div>
+
+  <div class="callout why">
+    <div class="ct">💡 Nếu <code>order_items</code> chỉ lưu <code>course_id</code> thì sao</div>
+    <p>Hoá đơn sẽ hiện <strong>199.000</strong> — trong khi ngân hàng đã trừ của A <strong>499.000</strong>. Kéo theo:</p>
+    <ul>
+      <li><strong>Đối soát lệch</strong> — sổ sách một đằng, cổng thanh toán một nẻo</li>
+      <li><strong>Hoàn tiền sai</strong> — trả lại 199.000 cho người đã đóng 499.000</li>
+      <li><strong>Doanh thu quá khứ tự đổi</strong> — báo cáo tháng 10 chạy lại hôm nay ra con số khác hôm qua</li>
+    </ul>
+    <p style="margin-bottom:0">
+      Không có sự cố nào, không có lỗi nào trong log. Chỉ là số liệu tài chính âm thầm sai — loại bug
+      tệ nhất vì <em>không ai phát hiện cho tới khi kiểm toán</em>.
+    </p>
+  </div>
+
+  <div class="callout warn">
+    <div class="ct">⚠️ "Lưu hai chỗ là dữ liệu thừa, phạm chuẩn hoá" — nghe rất có lý và rất sai</div>
+    <p>
+      Chuẩn hoá (normalization) bảo: đừng lưu <em>cùng một sự thật</em> ở hai nơi. Nhưng
+      <code>courses.current_price</code> và <code>order_items.unit_price</code> là <strong>hai sự thật
+      khác nhau</strong>:
+    </p>
+    <div class="code-block" style="margin-top:8px">
+      <span class="code-label">đọc kỹ hai câu này</span>
+<pre><code>courses.current_price     = "hôm nay khoá này bán bao nhiêu"
+order_items.unit_price    = "ngày 01/10 người ta ĐÃ TRẢ bao nhiêu"</code></pre>
+    </div>
+    <p style="margin-top:10px; margin-bottom:0">
+      Chúng tình cờ bằng nhau <em>tại thời điểm mua</em>, rồi đường ai nấy đi. Đây không phải dữ liệu
+      thừa — <strong>đây là dữ liệu khác bản chất mà tình cờ có cùng giá trị một lúc</strong>.
+      Nhận ra khác biệt đó là ranh giới rất rõ giữa người học thuộc quy tắc chuẩn hoá và người hiểu
+      nó dùng để làm gì.
+    </p>
+  </div>
+
+  <h2>6. Ràng buộc: để database tự bảo vệ mình</h2>
+
+  <p>
+    Bài 06 bạn đã validate ở tầng API bằng DTO. Vậy sao còn cần <code>CHECK</code>, <code>UNIQUE</code>,
+    <code>REFERENCES</code> trong database? Vì <strong>API không phải cửa duy nhất vào dữ liệu</strong>:
+    còn có script chạy tay, công cụ quản trị, đồng nghiệp gõ <code>psql</code> lúc nửa đêm, và chính bạn
+    lúc sửa dữ liệu gấp.
+  </p>
+
+  <p>Thử phá — tôi đã chạy đủ 8 ca này, tất cả đều bị chặn:</p>
+
+  <table class="data">
+    <thead><tr><th>Thử làm bậy</th><th>Postgres trả lời</th></tr></thead>
+    <tbody>
+      <tr><td>Ghi danh trùng cùng một khoá</td><td><code>duplicate key ... enrollments_user_id_course_id_key</code></td></tr>
+      <tr><td>Ghi danh vào khoá không tồn tại</td><td><code>violates foreign key constraint</code></td></tr>
+      <tr><td>Email trùng</td><td><code>duplicate key ... users_email_key</code></td></tr>
+      <tr><td><code>level = 'trung-cap'</code></td><td><code>violates check constraint courses_level_check</code></td></tr>
+      <tr><td>Giá âm</td><td><code>violates check constraint</code></td></tr>
+      <tr><td>Hai bài học cùng vị trí 1</td><td><code>duplicate key ... lessons_course_id_position_key</code></td></tr>
+      <tr><td>Tự gán <code>id</code></td><td><code>cannot insert a non-DEFAULT value into column "id"</code></td></tr>
+      <tr><td><strong>Xoá khoá đã có người mua</strong></td><td><code>violates RESTRICT setting of foreign key</code></td></tr>
+    </tbody>
+  </table>
+
+  <div class="callout why">
+    <div class="ct">💡 <code>CASCADE</code> vs <code>RESTRICT</code> — chọn theo nghĩa, đừng chọn cho tiện</div>
+    <table class="data" style="margin-top:8px">
+      <thead><tr><th></th><th><code>ON DELETE CASCADE</code></th><th><code>ON DELETE RESTRICT</code></th></tr></thead>
+      <tbody>
+        <tr><td>Nghĩa</td><td>xoá cha → con đi theo</td><td>còn con → <strong>cấm</strong> xoá cha</td></tr>
+        <tr><td>Dùng khi</td><td>con không tồn tại độc lập</td><td>con là bằng chứng phải giữ</td></tr>
+        <tr><td>Trong bài</td><td><code>lessons</code> theo <code>courses</code></td><td><code>orders</code> theo <code>users</code>, <code>order_items</code> theo <code>courses</code></td></tr>
+      </tbody>
+    </table>
+    <p style="margin-top:10px; margin-bottom:0">
+      Đặt <code>CASCADE</code> cho <code>orders → users</code> nghĩa là <em>xoá một tài khoản sẽ xoá sạch
+      lịch sử thanh toán của họ</em>. Một cú bấm nhầm là mất sổ sách, không phục hồi được.
+      <strong>Với dữ liệu tiền bạc, mặc định luôn là <code>RESTRICT</code>.</strong>
+    </p>
+  </div>
+
+  <div class="quiz">
+    <h3>🧠 Kiểm tra nhanh (bấm để có phản hồi ngay)</h3>
+
+    <div class="q">Câu 1. Vì sao <code>order_items</code> lưu <code>unit_price</code> thay vì đọc giá từ <code>courses</code>?</div>
+    <button class="opt" data-correct="false" data-explain="Chênh lệch tốc độ không đáng kể — JOIN một bảng có khoá chính là chuyện Postgres làm rất nhanh. Lý do hoàn toàn nằm ở tính ĐÚNG của dữ liệu.">A. Để truy vấn nhanh hơn, khỏi phải JOIN</button>
+    <button class="opt" data-correct="true" data-explain="Đúng. courses.current_price = 'hôm nay bán bao nhiêu'; order_items.unit_price = 'lúc đó đã trả bao nhiêu'. Không chụp lại thì giảm giá hôm nay làm hoá đơn cũ đổi theo: đối soát lệch, hoàn tiền sai, và doanh thu quá khứ tự thay đổi — không lỗi nào báo.">B. Vì đó là hai sự thật khác nhau: giá hiện tại vs giá đã trả tại thời điểm mua</button>
+    <button class="opt" data-correct="false" data-explain="Ngược lại — nó CÓ VẺ vi phạm chuẩn hoá, và đó là bẫy. Chuẩn hoá cấm lưu cùng một sự thật hai nơi; đây là hai sự thật khác nhau tình cờ bằng nhau một lúc.">C. Vì chuẩn hoá yêu cầu mỗi bảng phải tự chứa đủ dữ liệu</button>
+    <div class="feedback"></div>
+
+    <div class="q">Câu 2. Quan hệ "1 khoá có nhiều bài học" — khoá ngoại đặt ở bảng nào?</div>
+    <button class="opt" data-correct="false" data-explain="Không được. Muốn courses giữ danh sách bài học thì phải nhét nhiều giá trị vào MỘT ô — mà một ô chỉ chứa được một giá trị.">A. <code>courses</code> giữ danh sách <code>lesson_ids</code></button>
+    <button class="opt" data-correct="true" data-explain="Đúng. Bên 'nhiều' giữ khoá vì mỗi dòng của nó chỉ thuộc về ĐÚNG MỘT cha — vừa một ô. Đây cũng là lý do quan hệ n-n bắt buộc phải có bảng thứ ba: cả hai bên đều 'nhiều', không bên nào nhét vừa.">B. <code>lessons.course_id</code> — bên "nhiều" giữ khoá</button>
+    <button class="opt" data-correct="false" data-explain="Bảng nối chỉ cần cho quan hệ n-n. Ở đây một bài học chỉ thuộc một khoá, thêm bảng thứ ba là thừa và làm mọi truy vấn phức tạp hơn vô ích.">C. Tạo bảng nối <code>course_lessons</code></button>
+    <div class="feedback"></div>
+
+    <div class="q">Câu 3. Vì sao dùng <code>NUMERIC</code> chứ không <code>float</code> cho tiền?</div>
+    <button class="opt" data-correct="false" data-explain="NUMERIC thực ra CHẬM hơn float (tính bằng phần mềm thay vì phần cứng). Ta chấp nhận đánh đổi đó để lấy tính chính xác.">A. Vì <code>NUMERIC</code> tính toán nhanh hơn</button>
+    <button class="opt" data-correct="true" data-explain="Đúng — bạn đã tự chạy ra 0.1+0.2 = 0.30000000000000004 với float. float lưu xấp xỉ theo cơ số 2, NUMERIC lưu chính xác theo cơ số 10. Sai số nhỏ xíu nhưng cộng qua hàng triệu giao dịch thì sổ sách không bao giờ khớp với cổng thanh toán.">B. Vì <code>float</code> lưu xấp xỉ — <code>0.1+0.2</code> ra <code>0.30000000000000004</code></button>
+    <button class="opt" data-correct="false" data-explain="Cả hai đều lưu được số lớn. Vấn đề không phải độ lớn mà là ĐỘ CHÍNH XÁC ở phần thập phân.">C. Vì <code>float</code> không lưu được số lớn như 499000</button>
+    <div class="feedback"></div>
+
+    <div class="q">Câu 4. Đặt <code>ON DELETE CASCADE</code> cho <code>orders.user_id</code> thì hậu quả là gì?</div>
+    <button class="opt" data-correct="false" data-explain="Không tiện chút nào — đó là mất dữ liệu không phục hồi được. Và bạn hiếm khi thật sự muốn xoá cứng một user; thường chỉ cần đánh dấu đã vô hiệu hoá.">A. Tiện hơn, vì xoá user là dọn sạch dữ liệu liên quan</button>
+    <button class="opt" data-correct="true" data-explain="Đúng. Một cú bấm nhầm là bay toàn bộ lịch sử thanh toán của người đó — sổ sách kế toán không phục hồi được, và bạn còn có nghĩa vụ pháp lý phải lưu giữ. Với dữ liệu tiền bạc, mặc định luôn là RESTRICT.">B. Xoá một tài khoản sẽ xoá sạch lịch sử thanh toán của họ — mất sổ sách</button>
+    <button class="opt" data-correct="false" data-explain="Postgres cho phép bình thường — CASCADE là cấu hình hợp lệ. Nó không hỏi lại gì cả, và đó chính là chỗ nguy hiểm.">C. Postgres sẽ báo lỗi vì không cho phép CASCADE trên bảng đơn hàng</button>
+    <div class="feedback"></div>
+
+    <div class="q">Câu 5. Đã validate bằng DTO ở Bài 06 rồi, sao còn cần <code>CHECK</code> và <code>UNIQUE</code> trong database?</div>
+    <button class="opt" data-correct="false" data-explain="Không thừa chút nào — hai lớp bảo vệ ở hai tầng khác nhau, và chúng chặn những đường vào khác nhau.">A. Thừa thật — chỉ để cho chắc</button>
+    <button class="opt" data-correct="true" data-explain="Đúng. API không phải cửa duy nhất: còn script chạy tay, công cụ quản trị, đồng nghiệp gõ psql lúc nửa đêm, và chính bạn lúc sửa dữ liệu gấp. Ràng buộc trong DB là lớp cuối cùng không ai đi vòng được. Nguyên tắc chung với Bài 08: chống bằng CƠ CHẾ, đừng chống bằng kỷ luật.">B. Vì API không phải cửa duy nhất vào dữ liệu — còn psql, script, công cụ quản trị</button>
+    <button class="opt" data-correct="false" data-explain="Tốc độ không liên quan. Ràng buộc thậm chí làm ghi CHẬM hơn một chút — ta chấp nhận để đổi lấy sự đảm bảo rằng dữ liệu bẩn không vào được, bằng bất kỳ đường nào.">C. Vì ràng buộc trong DB chạy nhanh hơn validate ở API</button>
+    <div class="feedback"></div>
+  </div>
+
+  <div class="callout tip">
+    <div class="ct">✅ Dự án của bạn vừa lớn thêm</div>
+    <ul class="checklist">
+      <li><strong>6 bảng thật</strong> trong Postgres: users, courses, lessons, orders, order_items, enrollments</li>
+      <li>Đủ ba kiểu quan hệ: 1–n, n–n qua bảng nối, và khoá ngoại đặt đúng bên</li>
+      <li>Đã tự tay chứng minh hoá đơn cũ <em>không</em> đổi khi giảm giá</li>
+      <li>Ràng buộc chặn được 8 kiểu dữ liệu bẩn — kể cả khi đi thẳng bằng <code>psql</code></li>
+      <li>Phân biệt được dữ liệu <em>trạng thái</em> và dữ liệu <em>sự kiện</em></li>
+    </ul>
+  </div>
+
+  <h2>7. Câu hỏi tư duy (bắc cầu sang Bài 12)</h2>
+
+  <p>
+    Schema đã có, nhưng nó mới chỉ nằm trong một file <code>.sql</code> bạn chạy tay. Hai câu hỏi:
+  </p>
+  <p>
+    <strong>Một:</strong> tháng sau bạn cần thêm cột <code>courses.description</code>. Sửa
+    <code>schema.sql</code> rồi chạy lại? Nhưng chạy lại sẽ báo <em>"table already exists"</em>. Mà
+    database production thì <strong>đang có dữ liệu thật</strong> — không thể xoá đi tạo lại.
+    <em>Làm sao thay đổi cấu trúc một database đang chạy mà không mất dữ liệu?</em>
+  </p>
+  <p>
+    <strong>Hai:</strong> bạn sửa trên máy mình. Đồng nghiệp cũng sửa trên máy họ. Production thì đang
+    ở phiên bản cũ hơn cả hai. <strong>Ai biết database nào đang ở trạng thái nào?</strong>
+  </p>
+  <p>
+    Câu trả lời là <em>migration</em> — và nó chính là "git cho cấu trúc database".
+  </p>
+
+  <div class="next-box">
+    <div class="nl">→ Bài tiếp theo</div>
+    <div class="nt">Bài 12 · Prisma 7: schema, migrate, và nối API vào database thật</div>
+    <p class="nd">Chuyển 6 bảng SQL thành <code>schema.prisma</code>, dựng migration đầu tiên, và cho <code>GET /courses</code> đọc từ Postgres thật thay vì mảng trong bộ nhớ.</p>
+  </div>
+
+  <div class="navbar">
+    <a href="0010-pino-log-json.html">← Trước</a>
+    <a href="index.html">🏠 Mục lục</a>
+    <a class="disabled">Sau →</a>
+  </div>
+
+  <p class="try-it">
+    💬 <strong>Chạy tới đâu thấy lạ thì hỏi ngay.</strong> Thấy <code>\dt</code> liệt kê đủ 6 bảng, và
+    hoá đơn cũ vẫn ghi 499.000 sau khi bạn giảm giá xuống 199.000 — là bài này xong.
+  </p>
+
+</div>
+<script src="lesson-enhance.js"></script>
+</body>
+</html>

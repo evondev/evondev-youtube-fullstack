@@ -88,9 +88,9 @@ Cách đếm: số file trong `reference/` so với số bài trong `lessons/`.
 
 | Mốc | Trạng thái |
 |---|---|
-| Bài đã soạn | 11 (Bài 00 → Bài 10) |
+| Bài đã soạn | 12 (Bài 00 → Bài 11) |
 | Cheat-sheet đã có | 3 — `docker-lenh-thiet-yeu.html` (Module 0) · `node-va-nestjs-tra-nhanh.html` (Bài 01→06) · **`nestjs-thuc-chien-tra-nhanh.html`** (Bài 05→10, soạn 2026-08-27 khi Module 2 xong) |
-| Số bài KỂ TỪ cheat-sheet gần nhất | **0** — vừa reset |
+| Số bài KỂ TỪ cheat-sheet gần nhất | **1** (Bài 11) |
 | **Trigger kế tiếp** | Bài 15 (đủ 5 bài kể từ cheat-sheet gần nhất), hoặc khi Module 3 xong — cái nào tới trước. Nội dung dự kiến: *Postgres + Prisma thực chiến*. |
 
 ## Việc cần làm / theo dõi
@@ -234,6 +234,26 @@ Tuấn yêu cầu soạn sẵn 07+08+09 để học một lần. Đã verify to�
 - **Bài 09** request-id: `AsyncLocalStorage`, tôn trọng `x-request-id` client gửi, id vào cả body lỗi lẫn log.
 - Cả ba nối thành một mạch: hình dạng lỗi (07) → biết mình chạy ở đâu (08) → truy vết được là ai (09).
 - ⚠️ Bài 07 có route `boom` TẠM để demo 500 — bài đã dặn Tuấn xoá sau khi thử. Nhắc lại lúc chấm.
+
+### 🗄️ Module 3 bắt đầu — Bài 11 (2026-08-27)
+
+**Câu trả lời của Tuấn cho câu hỏi tư duy Bài 10:** *"lưu ở khoá học nhé"* → đúng một nửa. Đã dùng
+chính câu đó làm xương sống Bài 11 (snapshot giá trong `order_items`). Tuấn chưa nghĩ tới dữ liệu
+sự kiện vs dữ liệu trạng thái — đây là chỗ trống đáng ghi nhận, không phải lỗi.
+
+**Bài 11 dùng SQL THUẦN, chưa dùng Prisma** — cố ý, lặp lại mô hình Module 1→2 đã hiệu quả:
+thấy tầng dưới trước thì Prisma (Bài 12) mới là tiện nghi chứ không phải hộp đen.
+
+Đã verify THẬT trên Postgres 18.4 của Tuấn (tạo DB tạm `elearning_verify`, xong DROP; DB `elearning`
+của Tuấn vẫn 0 bảng, không đụng vào):
+- 6 bảng tạo OK; 8 ràng buộc đều chặn đúng (unique, FK, check, identity ALWAYS, RESTRICT)
+- Màn chứng minh: giảm giá 499k→199k + đổi tên khoá → hoá đơn cũ VẪN ghi 499k và tên cũ
+- `0.1+0.2` numeric = `0.3` vs float = `0.30000000000000004` → lý do dùng NUMERIC cho tiền
+- ⚠️ Mật khẩu Postgres đúng là `elearning_dev_pw` (trong docker-compose.yml), KHÔNG phải `elearning`
+
+**Module 3 đã đánh số lại trong `index.html`:** 11 schema · 12 Prisma · 13 N+1 · 14 index ·
+15 phân trang · 16 transaction · 17 migration an toàn. Bài "khoá chính/ngoại, 1-n, n-n" cũ đã bị
+Bài 11 nuốt trọn nên bỏ; phần *index* tách ra thành Bài 14 riêng vì nó là chuyện hiệu năng.
 
 ### 📗 Bài 10 (pino) — THÊM theo yêu cầu Tuấn (2026-08-27)
 
