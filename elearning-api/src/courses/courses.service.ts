@@ -1,10 +1,11 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { Course } from './course.interface';
 import { CreateCourseDto } from './dto/create-course.dto';
 
 // @Injectable() = "class này có thể được Nest tạo và tiêm vào chỗ khác".
 @Injectable()
 export class CoursesService {
+  private readonly logger = new Logger(CoursesService.name);
   private nextId = 3;
   private readonly courses: Course[] = [
     { id: 1, title: 'NestJS Fundamentals', level: 'beginner', price: 499000 },
@@ -18,6 +19,7 @@ export class CoursesService {
   }
 
   findOne(id: number): Course {
+    this.logger.log(`Looking up course id=${id}`);
     const course = this.courses.find((item) => item.id === id);
 
     // Ném exception, KHÔNG tự tay writeHead(404). Nest lo phần còn lại.

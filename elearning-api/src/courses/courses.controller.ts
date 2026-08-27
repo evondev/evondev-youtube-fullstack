@@ -23,6 +23,11 @@ export class CoursesController {
     return this.coursesService.findAll(level);
   }
 
+  @Get('boom')
+  boom(): never {
+    throw new Error('Kết nối Postgres thất bại: password=SuperSecret123');
+  }
+
   @Get(':id')
   findOne(@Param('id', ParseIntPipe) id: number): Course {
     return this.coursesService.findOne(id);
