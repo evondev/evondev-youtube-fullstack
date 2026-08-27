@@ -174,6 +174,7 @@ Log đổ chung một chỗ, nhưng lọc theo id là tách ra được:
 <span class="cmt">// Kế thừa logger sẵn có của Nest, chỉ dán thêm requestId vào đầu mỗi dòng.</span>
 <span class="kw">@Injectable</span>()
 <span class="kw">export class</span> AppLogger <span class="kw">extends</span> ConsoleLogger {
+  <span class="cmt">// Lấy 8 ký tự đầu của id cho log gọn — vẫn đủ để phân biệt và để grep.</span>
   <span class="kw">private</span> <span class="fn">tag</span>(message: <span class="kw">unknown</span>): <span class="kw">string</span> {
     <span class="kw">const</span> requestId = <span class="fn">getRequestId</span>();
 
@@ -181,6 +182,9 @@ Log đổ chung một chỗ, nhưng lọc theo id là tách ra được:
     <span class="kw">return</span> requestId ? <span class="str">`[</span>${requestId.<span class="fn">slice</span>(<span class="num">0</span>, <span class="num">8</span>)}<span class="str">] </span>${<span class="fn">String</span>(message)}<span class="str">`</span> : <span class="fn">String</span>(message);
   }
 
+  <span class="cmt">// Ghi đè 3 phương thức công khai của ConsoleLogger. Mỗi cái làm đúng một việc:</span>
+  <span class="cmt">// dán thẻ vào message rồi GỌI LẠI bản gốc (super) để nó in như thường.</span>
+  <span class="cmt">// ...rest là các tham số phụ Nest hay truyền kèm, ví dụ tên context hoặc stack.</span>
   <span class="fn">log</span>(message: <span class="kw">unknown</span>, ...rest: <span class="kw">unknown</span>[]) {
     <span class="kw">super</span>.<span class="fn">log</span>(<span class="kw">this</span>.<span class="fn">tag</span>(message), ...(rest <span class="kw">as</span> <span class="kw">string</span>[]));
   }

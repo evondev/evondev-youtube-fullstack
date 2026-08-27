@@ -174,43 +174,70 @@ curl -s -X POST http://localhost:3333/courses \
 <span class="kw">export class</span> AllExceptionsFilter <span class="kw">implements</span> ExceptionFilter {
   <span class="kw">private readonly</span> logger = <span class="kw">new</span> <span class="fn">Logger</span>(AllExceptionsFilter.name);
 
+  <span class="cmt">// Nest gọi hàm này mỗi khi có exception lọt ra khỏi handler.</span>
+  <span class="cmt">//   exception = thứ vừa bị ném ra. Kiểu `unknown` vì ta KHÔNG biết trước</span>
+  <span class="cmt">//               nó là gì — HttpException, Error, thậm chí một chuỗi.</span>
+  <span class="cmt">//   host      = "hộp đựng ngữ cảnh". Filter dùng lại được cho cả HTTP lẫn</span>
+  <span class="cmt">//               WebSocket/gRPC, nên Nest không đưa thẳng req/res mà đưa host.</span>
   <span class="fn">catch</span>(exception: <span class="kw">unknown</span>, host: ArgumentsHost) {
+    <span class="cmt">// Nói với host: "ngữ cảnh này là HTTP" -&gt; giờ mới lấy được req/res.</span>
     <span class="kw">const</span> ctx = host.<span class="fn">switchToHttp</span>();
-    <span class="kw">const</span> response = ctx.<span class="fn">getResponse</span>&lt;Response&gt;();
-    <span class="kw">const</span> request = ctx.<span class="fn">getRequest</span>&lt;Request&gt;();
+    <span class="kw">const</span> response = ctx.<span class="fn">getResponse</span>&lt;Response&gt;();   <span class="cmt">// để ta tự ghi response</span>
+    <span class="kw">const</span> request = ctx.<span class="fn">getRequest</span>&lt;Request&gt;();     <span class="cmt">// để đọc method + url</span>
 
+    <span class="cmt">// Phân đôi thế giới lỗi thành 2 loại. Đây là quyết định quan trọng nhất file này:</span>
+    <span class="cmt">//   - HttpException = lỗi CÓ CHỦ Ý (ta ném, hoặc pipe/Nest ném) -&gt; nói thật cho client.</span>
+    <span class="cmt">//   - còn lại       = TAI NẠN ngoài dự tính -&gt; giấu chi tiết, chỉ ghi log.</span>
     <span class="kw">const</span> isHttpException = exception <span class="kw">instanceof</span> HttpException;
+
+    <span class="cmt">// Lỗi có chủ ý thì tự nó mang sẵn status; tai nạn thì mặc định 500.</span>
     <span class="kw">const</span> statusCode = isHttpException
       ? exception.<span class="fn">getStatus</span>()
       : HttpStatus.INTERNAL_SERVER_ERROR;
 
-    <span class="cmt">// Gom mọi kiểu message về MỘT dạng: luôn là mảng chuỗi.</span>
+    <span class="cmt">// messages: LUÔN là mảng chuỗi (kể cả 1 phần tử) -&gt; client hết phải đoán kiểu.</span>
+    <span class="cmt">// error   : nhãn ngắn gọn, ví dụ 'Not Found' / 'Bad Request'.</span>
     <span class="kw">let</span> messages: <span class="kw">string</span>[];
     <span class="kw">let</span> error: <span class="kw">string</span>;
 
     <span class="kw">if</span> (isHttpException) {
+      <span class="cmt">// getResponse() trả về phần "ruột" mà người ném đã gắn vào exception.</span>
+      <span class="cmt">// Xui một nỗi: nó có HAI hình dạng khác nhau (xem giải thích ngay dưới).</span>
       <span class="kw">const</span> payload = exception.<span class="fn">getResponse</span>();
+
       <span class="kw">if</span> (<span class="kw">typeof</span> payload === <span class="str">'string'</span>) {
+        <span class="cmt">// Dạng 1 — chuỗi trần: throw new NotFoundException('Course not found')</span>
         messages = [payload];
         error = exception.name;
       } <span class="kw">else</span> {
+        <span class="cmt">// Dạng 2 — object: ValidationPipe ném ra { message: [...], error: '...' }</span>
+        <span class="cmt">// Phải ép kiểu vì getResponse() khai là `string | object` — mà `object`</span>
+        <span class="cmt">// thì TypeScript không cho đọc .message, ta phải nói rõ mình mong gì.</span>
         <span class="kw">const</span> body = payload <span class="kw">as</span> { message?: <span class="kw">string</span> | <span class="kw">string</span>[]; error?: <span class="kw">string</span> };
+
+        <span class="cmt">// message có thể là mảng (validation, nhiều lỗi) hoặc chuỗi (một lỗi).</span>
+        <span class="cmt">// Bọc lại cho về mảng hết.</span>
         messages = Array.<span class="fn">isArray</span>(body.message)
           ? body.message
           : [body.message ?? exception.message];
+
+        <span class="cmt">// ?? = "nếu bên trái null/undefined thì lấy bên phải".</span>
         error = body.error ?? exception.name;
       }
     } <span class="kw">else</span> {
-      <span class="cmt">// Lỗi KHÔNG lường trước: ghi log đầy đủ cho mình,</span>
-      <span class="cmt">// trả ra ngoài câu chung chung. Xem phần 5 để hiểu vì sao.</span>
+      <span class="cmt">// TAI NẠN: tuyệt đối không kể chi tiết ra ngoài (xem phần 5).</span>
       messages = [<span class="str">'Internal server error'</span>];
       error = <span class="str">'Internal Server Error'</span>;
+
+      <span class="cmt">// Nhưng ghi log ĐẦY ĐỦ cho mình, kèm stack để còn debug.</span>
       <span class="kw">this</span>.logger.<span class="fn">error</span>(
         <span class="str">`</span>${request.method}<span class="str"> </span>${request.url}<span class="str">`</span>,
         exception <span class="kw">instanceof</span> Error ? exception.stack : <span class="fn">String</span>(exception),
       );
     }
 
+    <span class="cmt">// Dựng body theo đúng khuôn đã khai ở trên, rồi TỰ TAY gửi đi.</span>
+    <span class="cmt">// Tới đây ta thay Nest làm việc trả response, nên phải gọi .status().json().</span>
     <span class="kw">const</span> body: ErrorBody = {
       statusCode,
       error,
@@ -222,6 +249,43 @@ curl -s -X POST http://localhost:3333/courses \
     response.<span class="fn">status</span>(statusCode).<span class="fn">json</span>(body);
   }
 }</code></pre>
+  </div>
+
+  <div class="callout why">
+    <div class="ct">💡 Ba thứ lạ trong đoạn trên — giải thích cho rõ</div>
+
+    <p><strong>1. <code>ArgumentsHost</code> — vì sao không đưa thẳng <code>req</code>, <code>res</code>?</strong><br>
+    Vì Nest không chỉ chạy HTTP. Cùng một ứng dụng có thể phục vụ HTTP, WebSocket (Bài về realtime),
+    hoặc gRPC — mỗi loại có "request/response" hình dạng khác nhau. Nên Nest đưa bạn cái
+    <em>hộp</em> chung, rồi bạn mở đúng ngăn mình cần:
+    <code>host.switchToHttp()</code> → ngăn HTTP, <code>host.switchToWs()</code> → ngăn WebSocket.
+    Nhờ vậy filter viết một lần dùng được nhiều nơi.</p>
+
+    <p><strong>2. <code>getResponse&lt;Response&gt;()</code> — cặp ngoặc nhọn để làm gì?</strong><br>
+    Nest không biết bạn chạy trên Express hay Fastify nên nó khai kiểu trả về rất chung.
+    <code>&lt;Response&gt;</code> là bạn nói: <em>"tôi biết đây là Response của Express"</em> — nhờ đó
+    editor mới gợi ý được <code>.status()</code>, <code>.json()</code>. Đây cũng là lý do phải
+    <code>import type { Request, Response } from 'express'</code> ở đầu file.</p>
+
+    <p style="margin-bottom:0"><strong>3. Vì sao <code>getResponse()</code> có HAI hình dạng?</strong><br>
+    Vì hai người khác nhau ném ra, theo hai cách khác nhau — bạn tự kiểm chứng được:</p>
+
+    <div class="code-block" style="margin-top:10px">
+      <span class="code-label">cùng là HttpException, nhưng ruột khác nhau</span>
+<pre><code><span class="cmt">// Bạn ném ở Bài 05 — truyền một CHUỖI:</span>
+<span class="kw">throw new</span> <span class="fn">NotFoundException</span>(<span class="str">'Course with id=99 not found'</span>);
+   <span class="cmt">// -&gt; getResponse() cho ra: 'Course with id=99 not found'   (chuỗi trần)</span>
+
+<span class="cmt">// ValidationPipe ném ở Bài 06 — nó cần chứa NHIỀU lỗi nên dùng OBJECT:</span>
+   <span class="cmt">// -&gt; getResponse() cho ra: { message: ['title must...', 'price must...'],</span>
+   <span class="cmt">//                            error: 'Bad Request', statusCode: 400 }</span></code></pre>
+    </div>
+
+    <p style="margin-top:10px; margin-bottom:0">
+      Đó chính là nguồn gốc của <em>"lúc là chuỗi, lúc là mảng"</em> mà bạn thấy ở phần 1. Nhánh
+      <code>if (typeof payload === 'string')</code> tồn tại đúng để gom hai thứ đó về một.
+      <strong>Filter này không sửa được gốc rễ — nó chỉ dựng một bức tường trước khi lỗi ra tới client.</strong>
+    </p>
   </div>
 
   <p>Bật nó lên trong <code>src/main.ts</code>:</p>

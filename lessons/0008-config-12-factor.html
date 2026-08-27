@@ -116,11 +116,18 @@ JWT_SECRET=doi-chuoi-nay-o-production</code></pre>
 
   <div class="code-block">
     <span class="code-label">elearning-api/src/config/env.validation.ts</span>
-<pre><code><span class="kw">import</span> { plainToInstance } <span class="kw">from</span> <span class="str">'class-transformer'</span>;
+<pre><code><span class="cmt">// plainToInstance: biến một object "trần" (đọc từ .env) thành THỂ HIỆN của class,</span>
+<span class="cmt">// để class-validator có chỗ đọc decorator. Giống hệt việc ValidationPipe làm với</span>
+<span class="cmt">// body ở Bài 06 — chỉ khác nguồn dữ liệu.</span>
+<span class="kw">import</span> { plainToInstance } <span class="kw">from</span> <span class="str">'class-transformer'</span>;
+<span class="cmt">// validateSync: bản ĐỒNG BỘ của validate. Dùng bản đồng bộ vì lúc khởi động</span>
+<span class="cmt">// ta cần biết kết quả NGAY, không có gì để chờ cả.</span>
 <span class="kw">import</span> {
   IsEnum, IsInt, IsString, Max, Min, MinLength, validateSync,
 } <span class="kw">from</span> <span class="str">'class-validator'</span>;
 
+<span class="cmt">// enum thay vì union string: để @IsEnum dùng được, và để chỗ khác trong code</span>
+<span class="cmt">// so sánh bằng Environment.Production thay vì gõ tay chuỗi 'production' (dễ sai chính tả).</span>
 <span class="kw">export enum</span> Environment {
   Development = <span class="str">'development'</span>,
   Production = <span class="str">'production'</span>,
@@ -128,29 +135,43 @@ JWT_SECRET=doi-chuoi-nay-o-production</code></pre>
 }
 
 <span class="cmt">// Khai báo MỌI biến môi trường mà ứng dụng cần, kèm ràng buộc.</span>
+<span class="cmt">// Class này KHÔNG export — nó chỉ là bản mô tả dùng nội bộ trong file.</span>
 <span class="kw">class</span> EnvironmentVariables {
+  <span class="cmt">// Dấu ! = "tôi biết TypeScript không thấy chỗ nào gán, nhưng cứ tin tôi".</span>
+  <span class="cmt">// Cần vì giá trị do plainToInstance đổ vào lúc chạy, không gán trong code.</span>
   <span class="kw">@IsEnum</span>(Environment, { message: <span class="str">'NODE_ENV must be development | production | test'</span> })
   NODE_ENV!: Environment;
 
   <span class="kw">@IsInt</span>({ message: <span class="str">'PORT must be an integer'</span> })
   <span class="kw">@Min</span>(<span class="num">1</span>, { message: <span class="str">'PORT must be &gt;= 1'</span> })
+  <span class="cmt">// 65535 là cổng lớn nhất tồn tại (giới hạn 16 bit của TCP).</span>
   <span class="kw">@Max</span>(<span class="num">65535</span>, { message: <span class="str">'PORT must be &lt;= 65535'</span> })
   PORT!: <span class="kw">number</span>;
 
+  <span class="cmt">// 16 ký tự là mức tối thiểu tự đặt ra — khoá ngắn thì dò ra được.</span>
   <span class="kw">@IsString</span>()
   <span class="kw">@MinLength</span>(<span class="num">16</span>, { message: <span class="str">'JWT_SECRET must be at least 16 characters'</span> })
   JWT_SECRET!: <span class="kw">string</span>;
 }
 
-<span class="cmt">// Nest gọi hàm này MỘT LẦN lúc khởi động. Ném lỗi ở đây = app không lên.</span>
+<span class="cmt">// Nest gọi hàm này MỘT LẦN lúc khởi động, truyền vào toàn bộ biến môi trường.</span>
+<span class="cmt">// Ném lỗi ở đây = app không lên. Đó chính là điều ta muốn.</span>
 <span class="kw">export function</span> <span class="fn">validateEnv</span>(config: Record&lt;<span class="kw">string</span>, <span class="kw">unknown</span>&gt;) {
   <span class="kw">const</span> parsed = <span class="fn">plainToInstance</span>(EnvironmentVariables, config, {
-    enableImplicitConversion: <span class="kw">true</span>,   <span class="cmt">// '3333' -&gt; 3333</span>
+    <span class="cmt">// Biến môi trường LUÔN là chuỗi. Dòng này cho phép đổi '3333' -&gt; 3333</span>
+    <span class="cmt">// theo đúng kiểu đã khai ở trên. Thiếu nó thì @IsInt luôn trượt.</span>
+    enableImplicitConversion: <span class="kw">true</span>,
   });
 
+  <span class="cmt">// skipMissingProperties: false = biến THIẾU HẲN cũng tính là lỗi.</span>
+  <span class="cmt">// Để true thì quên khai JWT_SECRET sẽ lọt qua im lặng — đúng thứ ta muốn tránh.</span>
   <span class="kw">const</span> errors = <span class="fn">validateSync</span>(parsed, { skipMissingProperties: <span class="kw">false</span> });
 
   <span class="kw">if</span> (errors.length &gt; <span class="num">0</span>) {
+    <span class="cmt">// Mỗi `error` là một TRƯỜNG sai, và một trường có thể vi phạm NHIỀU ràng buộc</span>
+    <span class="cmt">// (ví dụ PORT vừa không phải số, vừa ngoài khoảng). error.constraints là object</span>
+    <span class="cmt">// dạng { isInt: 'PORT must be an integer', min: 'PORT must be >= 1' }.</span>
+    <span class="cmt">// flatMap = map rồi trải phẳng -&gt; gom tất cả câu lỗi của MỌI trường vào 1 mảng.</span>
     <span class="kw">const</span> details = errors
       .<span class="fn">flatMap</span>((error) => Object.<span class="fn">values</span>(error.constraints ?? {}))
       .<span class="fn">map</span>((line) => <span class="str">`  - </span>${line}<span class="str">`</span>)
@@ -159,6 +180,7 @@ JWT_SECRET=doi-chuoi-nay-o-production</code></pre>
     <span class="kw">throw new</span> <span class="fn">Error</span>(<span class="str">`\n❌ Cấu hình không hợp lệ:\n</span>${details}<span class="str">\n`</span>);
   }
 
+  <span class="cmt">// Trả về bản ĐÃ ĐỔI KIỂU — nhờ vậy ConfigService.get('PORT') cho ra số thật.</span>
   <span class="kw">return</span> parsed;
 }</code></pre>
   </div>
@@ -183,9 +205,15 @@ JWT_SECRET=doi-chuoi-nay-o-production</code></pre>
 
 <span class="kw">@Module</span>({
   imports: [
+    <span class="cmt">// forRoot = "cấu hình module này một lần cho cả ứng dụng".</span>
+    <span class="cmt">// Nó tự đọc file .env ở thư mục gốc, không cần khai đường dẫn.</span>
     <span class="fn">ConfigModule.forRoot</span>({
-      isGlobal: <span class="kw">true</span>,          <span class="cmt">// khỏi phải import lại ở từng module</span>
-      validate: validateEnv,   <span class="cmt">// kiểm cấu hình NGAY lúc khởi động</span>
+      <span class="cmt">// Không có dòng này thì MỖI module muốn tiêm ConfigService</span>
+      <span class="cmt">// đều phải tự import ConfigModule vào imports của nó.</span>
+      isGlobal: <span class="kw">true</span>,
+      <span class="cmt">// Truyền HÀM (không gọi nó) — Nest sẽ tự gọi lúc khởi động.</span>
+      <span class="cmt">// Viết validateEnv() có ngoặc là sai: nó chạy ngay lúc này, thiếu dữ liệu.</span>
+      validate: validateEnv,
     }),
     CoursesModule,
   ],
