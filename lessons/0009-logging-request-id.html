@@ -32,17 +32,63 @@
 
   <h2>1. Nhìn thấy vấn đề đã</h2>
 
-  <p>Mở API và bắn vài request cùng lúc, rồi nhìn terminal chạy server:</p>
+  <p>
+    Trước hết cần <em>có log để nhìn</em>. Hiện API của bạn gần như im lặng: filter ở Bài 07 chỉ ghi log
+    khi có lỗi <code>500</code>, còn <code>404</code> hay request thành công thì không ghi gì.
+    Thêm một dòng log vào service — <strong>đây không phải code tạm, code thật cũng viết vậy</strong>:
+  </p>
+
+  <div class="code-block">
+    <span class="code-label">elearning-api/src/courses/courses.service.ts — 3 chỗ sửa</span>
+<pre><code><span class="cmt">// 1) bổ sung Logger vào dòng import sẵn có</span>
+<span class="kw">import</span> { Injectable, Logger, NotFoundException } <span class="kw">from</span> <span class="str">'@nestjs/common'</span>;
+
+<span class="kw">export class</span> CoursesService {
+  <span class="cmt">// 2) mỗi class một logger riêng, đặt tên theo chính class đó</span>
+  <span class="cmt">//    -&gt; log sẽ hiện [CoursesService], biết ngay dòng đó từ đâu ra</span>
+  <span class="kw">private readonly</span> logger = <span class="kw">new</span> <span class="fn">Logger</span>(CoursesService.name);
+
+  <span class="cmt">// ... các thứ khác giữ nguyên ...</span>
+
+  <span class="fn">findOne</span>(id: <span class="kw">number</span>): Course {
+    <span class="cmt">// 3) ghi lại việc mình đang làm</span>
+    <span class="kw">this</span>.logger.<span class="fn">log</span>(<span class="str">`Looking up course id=</span>${id}<span class="str">`</span>);
+
+    <span class="kw">const</span> course = <span class="kw">this</span>.courses.<span class="fn">find</span>((item) => item.id === id);
+    <span class="cmt">// ... phần còn lại giữ nguyên ...</span>
+  }
+}</code></pre>
+  </div>
+
+  <p>Khởi động lại, rồi bắn 5 request cùng lúc và nhìn terminal chạy server:</p>
 
   <div class="code-block">
     <span class="code-label">bash</span>
 <pre><code><span class="fn">seq</span> <span class="num">5</span> | xargs -P<span class="num">5</span> -I{} curl -s -o /dev/null http://localhost:3333/courses/99</code></pre>
   </div>
 
+  <div class="code-block">
+    <span class="code-label">log server — THẬT (đã verify)</span>
+<pre><code>LOG [CoursesService] Looking up course id=<span class="num">99</span>
+LOG [CoursesService] Looking up course id=<span class="num">99</span>
+LOG [CoursesService] Looking up course id=<span class="num">99</span>
+LOG [CoursesService] Looking up course id=<span class="num">99</span>
+LOG [CoursesService] Looking up course id=<span class="num">99</span></code></pre>
+  </div>
+
   <p>
-    Log hiện ra 5 dòng lỗi <em>giống hệt nhau</em>, không phân biệt được. Nếu chúng xen kẽ với log của
-    request khác — mà production thì luôn như vậy — bạn không có cách nào biết dòng nào thuộc về ai.
+    Năm dòng <strong>giống hệt nhau</strong>, không phân biệt được dòng nào của ai. Ở đây mới có một loại
+    request; production thì chúng xen kẽ với log của hàng trăm người khác — lúc đó bạn hoàn toàn bó tay.
   </p>
+
+  <div class="callout tip">
+    <div class="ct">🔎 Nhớ dòng log này — cuối bài ta sẽ nhìn lại đúng nó</div>
+    <p style="margin-bottom:0">
+      Ta sẽ <strong>không sửa một chữ nào</strong> trong <code>courses.service.ts</code> nữa. Vậy mà
+      cuối bài, chính 5 dòng này sẽ tự phân biệt được. Đó là cách đo xem <code>AsyncLocalStorage</code>
+      đáng giá tới đâu: <em>thêm được ngữ cảnh mà không phải đụng vào code nghiệp vụ.</em>
+    </p>
+  </div>
 
   <div class="callout why">
     <div class="ct">💡 Vì sao đây là vấn đề của <em>backend</em> chứ không phải frontend</div>
@@ -299,7 +345,39 @@ x-request-id: dbaa89c4-810e-4817-8f23-d1629861c27f</code></pre>
  <span class="str">"requestId"</span>:<span class="str">"theo-dau-vet-abc"</span>}</code></pre>
   </div>
 
-  <p>Và log server, khi có lỗi <code>500</code>:</p>
+  <p>
+    Và giờ là phần đáng giá nhất — <strong>chạy lại đúng lệnh ở phần 1</strong>:
+  </p>
+
+  <div class="code-block">
+    <span class="code-label">bash — y hệt lệnh đầu bài</span>
+<pre><code><span class="fn">seq</span> <span class="num">5</span> | xargs -P<span class="num">5</span> -I{} curl -s -o /dev/null http://localhost:3333/courses/99</code></pre>
+  </div>
+
+  <div class="code-block">
+    <span class="code-label">log server — THẬT (đã verify)</span>
+<pre><code>LOG [CoursesService] [145b7799] Looking up course id=<span class="num">99</span>
+LOG [CoursesService] [ca454126] Looking up course id=<span class="num">99</span>
+LOG [CoursesService] [031b3a0f] Looking up course id=<span class="num">99</span>
+LOG [CoursesService] [316bcf7c] Looking up course id=<span class="num">99</span>
+LOG [CoursesService] [5c5cd2b5] Looking up course id=<span class="num">99</span></code></pre>
+  </div>
+
+  <div class="callout why">
+    <div class="ct">💡 So sánh với phần 1 — và để ý thứ KHÔNG thay đổi</div>
+    <p style="margin-bottom:0">
+      Năm dòng giống hệt nhau giờ đã tách bạch. Nhưng điều đáng nói là:
+      <strong><code>courses.service.ts</code> không bị sửa một chữ nào.</strong> Dòng
+      <code>this.logger.log(...)</code> vẫn y nguyên như lúc bạn viết ở phần 1 — nó không hề biết
+      <code>requestId</code> tồn tại, và cũng không cần biết.
+      <br><br>
+      Đó chính là thứ <code>AsyncLocalStorage</code> mua cho bạn: <em>thêm ngữ cảnh vào toàn hệ thống
+      mà không đụng tới code nghiệp vụ.</em> Cách thô sơ (truyền <code>requestId</code> qua từng hàm) sẽ
+      bắt bạn sửa <code>findOne</code>, <code>findAll</code>, <code>create</code>, và mọi hàm viết sau này.
+    </p>
+  </div>
+
+  <p>Log lỗi <code>500</code> cũng được gắn thẻ y như vậy:</p>
 
   <div class="code-block">
     <span class="code-label">log server — THẬT</span>
@@ -378,6 +456,7 @@ Error: ...</code></pre>
       <li>Id tự dán vào mọi dòng log, và nằm trong body lỗi để khách đọc được</li>
       <li>Tôn trọng id từ hệ thống phía trước — sẵn sàng cho tracing nhiều tầng</li>
       <li>Hiểu vì sao <code>AsyncLocalStorage</code> làm được điều đó (nối thẳng về Bài 03)</li>
+      <li>Thấy tận mắt: cùng một dòng log, <strong>không sửa code nghiệp vụ</strong>, mà tự phân biệt được</li>
     </ul>
   </div>
 
