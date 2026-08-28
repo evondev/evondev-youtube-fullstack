@@ -442,3 +442,42 @@ Sau này Bài 57 (Linux) sẽ đào sâu; cheat-sheet này chỉ để đọc đ
 
 **Mục 10 "Khi kẹt — 4 câu hỏi theo thứ tự"** là phần đáng giá nhất: dạy cách khoanh vùng lỗi
 (exit code nói về ĐƯỜNG TRUYỀN, status code nói về ỨNG DỤNG) thay vì đoán mò.
+
+### ✅ BÀI 12 — Prisma 7: nối API vào database thật (soạn 2026-08-28)
+
+Tuấn báo học xong Bài 11 → soạn tiếp ngay. Bài trả lời đúng 2 câu hỏi Bài 11 để lại
+(migration + `_prisma_migrations` = "git cho cấu trúc database").
+
+**Verify trong DB tạm `elearning_b12` (đã DROP; DB `elearning` của Tuấn vẫn 6 bảng, 1 khoá học).**
+Bản sao code ở scratchpad, repo Tuấn không bị đụng.
+
+🔴 **Prisma 7 KHÁC HẲN mọi bài hướng dẫn trên mạng — 4 điểm đã đâm thật:**
+1. `npm i prisma@latest` → **8.0.0-rc.12** (bản rc!) trong khi `@prisma/client` ra 7.10.0 → lệch phiên
+   bản. PHẢI ghim `prisma@7 @prisma/client@7`.
+2. **Driver adapter bắt buộc.** `super()` trống → chết lúc khởi động:
+   `PrismaClientInitializationError: ... A driver adapter is required`. Cần `@prisma/adapter-pg`.
+3. Client sinh vào **`src/generated/prisma`** (không phải `node_modules`) → import từ đường dẫn tương đối,
+   KHÔNG từ `@prisma/client`. Type của model là `CourseModel`, không phải `Course`.
+4. `migrate diff` đổi cờ `--to-schema-datamodel` → **`--to-schema`** (gõ tên cũ là báo lỗi).
+   Ngoài ra `prisma init` còn vứt rác `.agents/ .windsurf/ .claude/ skills-lock.json`.
+
+**Ba khoảnh khắc dạy học đắt nhất (đều là kết quả thật):**
+- `db pull` cảnh báo **không hiểu 5 CHECK constraint** → rồi mục 8 chứng minh chúng VẪN chặn:
+  gỡ `@IsIn` khỏi DTO, POST `level='trung-cap'` → `violates check constraint "courses_level_check"`.
+  Đây là bằng chứng sống cho luận điểm cốt lõi của Bài 11.
+- `TypeError: Do not know how to serialize a BigInt` → và **filter Bài 07 + log Bài 09/10 bắt trọn**,
+  app không sập, có requestId để lần. Hạ tầng làm trước bắt đầu trả lãi — đã nêu rõ trong bài.
+- `UPDATE` bằng psql rồi curl lại **không restart** → thấy giá mới ngay. Bằng chứng dứt điểm là DB thật.
+
+⚠️ **Phát hiện trung thực đã đưa vào bài:** migration Prisma sinh ra **YẾU HƠN** `schema.sql` Tuấn viết —
+đếm thật trong `0_init/migration.sql`: giữ 6 FK, 3 CASCADE, 3 RESTRICT, 4 UNIQUE nhưng **mất cả 5 CHECK**
+và `GENERATED ALWAYS AS IDENTITY` → `BIGSERIAL` (tự gán id được trở lại). Trên DB hiện tại thì 5 CHECK
+vẫn còn (migrate chỉ chạy `ALTER TABLE ADD COLUMN`, đã kiểm lại `pg_constraint`), nhưng ai dựng mới bằng
+`migrate deploy` sẽ có DB yếu hơn mà không ai nhận ra. Bài chỉ cách xử lý: **sửa tay file migration**,
+và nối thẳng sang Module 3.5 (SQL thuần).
+
+**Nhắc Tuấn 2 việc dọn:** xoá route `@Get('boom')` (còn sót từ Bài 07) · `.gitignore` thêm
+`src/generated/`, GIỮ `prisma/migrations/` trong git.
+
+Bắc cầu Bài 13: đặt sẵn đoạn code N+1 (`findMany` rồi `for` gọi `lesson.findMany`) — 3 khoá = 4 truy vấn,
+500 khoá = 501 truy vấn.

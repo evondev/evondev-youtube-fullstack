@@ -1,0 +1,810 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Bài 12 · Prisma 7: nối API vào database thật</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="lesson.css">
+</head>
+<body>
+<div class="wrap">
+
+  <span class="lesson-tag">Module 3 · Bài 12</span>
+  <h1>Prisma 7: nối API vào database thật, và "git cho cấu trúc database"</h1>
+  <p class="subtitle">Mảng dữ liệu giả trong <code>CoursesService</code> đã sống được 7 bài. Hôm nay nó chết — và <code>/courses</code> đọc từ Postgres thật.</p>
+  <p class="meta-line">⏱ ~50 phút · 🎯 Sản phẩm: <code>/courses</code> đọc-ghi Postgres · migration đầu tiên chạy được · đã chạy thật: Prisma 7.10.0 · NestJS 11 · Postgres 18.4</p>
+
+  <div class="callout bridge">
+    <div class="ct">🌉 Bài 11 kết bằng hai câu hỏi. Đây là câu trả lời.</div>
+    <p>
+      <strong>Một:</strong> <em>"Làm sao thay đổi cấu trúc database đang chạy mà không mất dữ liệu?"</em>
+      → <strong>migration</strong>: mỗi thay đổi là một file SQL nhỏ, được đánh số và ghi lại là đã chạy chưa.
+    </p>
+    <p style="margin-bottom:0">
+      <strong>Hai:</strong> <em>"Ai biết database nào đang ở trạng thái nào?"</em>
+      → chính database tự ghi. Prisma tạo bảng <code>_prisma_migrations</code> trong đó, liệt kê những
+      migration đã áp dụng. Hỏi bất kỳ database nào <em>"mày đang ở đâu?"</em> đều có câu trả lời.
+      Đó là lý do người ta gọi migration là <strong>git cho cấu trúc database</strong>.
+    </p>
+  </div>
+
+  <h2>1. Prisma làm gì cho bạn — và lấy đi cái gì</h2>
+
+  <p>
+    Không có Prisma, để đọc một khoá học bạn phải: viết chuỗi SQL, mở kết nối, truyền tham số cho đúng
+    (sai là dính SQL injection), nhận về mảng object không có kiểu, tự đổi <code>current_price</code>
+    thành <code>price</code>. Mỗi bảng làm lại từ đầu.
+  </p>
+
+  <table class="data">
+    <thead><tr><th>Prisma cho</th><th>Đổi lại bạn mất</th></tr></thead>
+    <tbody>
+      <tr><td>Truy vấn có <strong>kiểu</strong> — gõ sai tên cột là TypeScript báo ngay</td><td>Một lớp trung gian nữa phải học</td></tr>
+      <tr><td>Tự tham số hoá — <strong>miễn nhiễm SQL injection</strong></td><td>Không thấy câu SQL thật đang chạy</td></tr>
+      <tr><td>Quản lý kết nối, connection pool</td><td>Truy vấn phức tạp diễn đạt khó hơn SQL thuần</td></tr>
+      <tr><td><strong>Migration</strong> có lịch sử</td><td>Vài thứ SQL làm được mà Prisma không (mục 9)</td></tr>
+    </tbody>
+  </table>
+
+  <div class="callout why">
+    <div class="ct">💡 Vì sao Bài 11 bắt bạn viết SQL tay trước</div>
+    <p style="margin-bottom:0">
+      Vì đúng lý do Module 1 bắt bạn viết <code>node:http</code> trước NestJS. Giờ nhìn Prisma bạn
+      biết nó đang <em>thay bạn gõ cái gì</em> — nó là lớp tiện nghi, không phải hộp đen. Và khi Prisma
+      bó tay (Module 3.5), bạn tự viết tiếp được.
+    </p>
+  </div>
+
+  <h2>2. Cài đặt — và một cái bẫy phiên bản</h2>
+
+  <div class="callout danger">
+    <div class="ct">🚨 Đừng gõ <code>npm i prisma@latest</code></div>
+    <p>Tôi đã thử đúng lệnh đó khi soạn bài. Kết quả thật:</p>
+    <div class="code-block" style="margin-top:8px">
+      <span class="code-label">hai gói lệch nhau — hỏng ngầm</span>
+<pre><code>"prisma": "^8.0.0-rc.12"      <span class="cmt">← bản thử nghiệm (rc = release candidate)</span>
+"@prisma/client": "^7.10.0"   <span class="cmt">← bản ổn định</span></code></pre>
+    </div>
+    <p style="margin-top:10px; margin-bottom:0">
+      <code>@latest</code> lấy cả bản chưa phát hành chính thức, và hai gói này <strong>bắt buộc phải
+      cùng phiên bản</strong>. Luôn ghim số phiên bản lớn:
+    </p>
+  </div>
+
+  <div class="code-block">
+    <span class="code-label">bash — trong elearning-api/</span>
+<pre><code>npm i prisma@<span class="num">7</span> @prisma/client@<span class="num">7</span>
+npm i @prisma/adapter-pg          <span class="cmt"># bắt buộc từ Prisma 7 — xem mục 5</span>
+npm i -D dotenv                    <span class="cmt"># prisma7.config.ts cần nó để đọc .env</span></code></pre>
+  </div>
+
+  <div class="code-block">
+    <span class="code-label">bash — kiểm hai gói đã khớp</span>
+<pre><code>npx prisma --version</code></pre>
+  </div>
+
+  <div class="code-block">
+    <span class="code-label">phải thấy (kết quả THẬT)</span>
+<pre><code>prisma               : 7.10.0
+@prisma/client       : 7.10.0
+Operating System     : darwin</code></pre>
+  </div>
+
+  <div class="code-block">
+    <span class="code-label">bash — khởi tạo</span>
+<pre><code>npx prisma init --datasource-provider postgresql</code></pre>
+  </div>
+
+  <div class="callout warn">
+    <div class="ct">⚠️ <code>prisma init</code> vứt rác vào thư mục</div>
+    <p style="margin-bottom:0">
+      Nó tạo thêm <code>.agents/</code>, <code>.windsurf/</code>, <code>.claude/skills/</code> và
+      <code>skills-lock.json</code> — tài liệu cho các công cụ AI, không liên quan gì tới app.
+      Xoá đi cũng được, hoặc thêm vào <code>.gitignore</code>. Thứ bạn thật sự cần chỉ có hai:
+      <code>prisma/schema.prisma</code> và <code>prisma7.config.ts</code>.
+    </p>
+  </div>
+
+  <div class="code-block">
+    <span class="code-label">elearning-api/.env — thêm một dòng</span>
+<pre><code>NODE_ENV=development
+PORT=<span class="num">3333</span>
+JWT_SECRET=doi-chuoi-nay-o-production
+<span class="cmt"># Chuỗi kết nối: user:mật_khẩu@host:port/tên_database</span>
+DATABASE_URL=<span class="str">"postgresql://elearning:elearning_dev_pw@localhost:5433/elearning"</span></code></pre>
+  </div>
+
+  <div class="callout tip">
+    <div class="ct">🔎 Nối lại Bài 08 — bắt lỗi cấu hình lúc khởi động</div>
+    <p style="margin-bottom:0">
+      Thêm <code>DATABASE_URL</code> vào <code>EnvironmentVariables</code> trong
+      <code>src/config/env.validation.ts</code> (dùng <code>@IsString()</code>). Thiếu biến đó thì app
+      <strong>chết ngay lúc khởi động</strong> với thông báo rõ ràng, thay vì chạy được rồi sập lúc
+      có request đầu tiên. Đúng nguyên tắc fail-fast của Bài 08.
+    </p>
+  </div>
+
+  <h2>3. <code>db pull</code> — Prisma ĐỌC database bạn đã có</h2>
+
+  <p>
+    Đây là chỗ hầu hết bài hướng dẫn trên mạng làm ngược: họ bảo bạn viết
+    <code>schema.prisma</code> trước rồi để Prisma tạo bảng. <strong>Bạn đã có 6 bảng thật rồi</strong> —
+    làm theo họ là tạo lại chồng lên, hoặc tệ hơn, xoá đi làm lại.
+  </p>
+
+  <p>Đi đúng chiều: bảo Prisma <em>đọc</em> database và tự viết schema cho bạn.</p>
+
+  <div class="code-block">
+    <span class="code-label">bash</span>
+<pre><code>npx prisma db pull</code></pre>
+  </div>
+
+  <div class="code-block">
+    <span class="code-label">kết quả THẬT</span>
+<pre><code>Datasource "db": PostgreSQL database "elearning", schema "public" at "localhost:5433"
+
+✔ Introspected 6 models and wrote them into prisma/schema.prisma in 74ms
+
+*** WARNING ***
+
+These constraints are not supported by Prisma Client, because Prisma currently
+does not fully support check constraints.
+  - Model: "courses", constraint: "courses_level_check"
+  - Model: "courses", constraint: "courses_current_price_check"
+  - Model: "orders", constraint: "orders_status_check"
+  - Model: "orders", constraint: "orders_total_price_check"
+  - Model: "order_items", constraint: "order_items_unit_price_check"</code></pre>
+  </div>
+
+  <div class="callout why">
+    <div class="ct">💡 Đọc kỹ cảnh báo này — nó xác nhận đúng bài học của Bài 11</div>
+    <p>
+      Prisma nói: <em>"tôi không hiểu được 5 ràng buộc CHECK này"</em>. Câu hỏi quan trọng:
+      <strong>vậy chúng còn bảo vệ dữ liệu không?</strong>
+    </p>
+    <p style="margin-bottom:0">
+      <strong>Còn nguyên.</strong> Chúng sống trong Postgres, không sống trong Prisma. Prisma không
+      biết chúng tồn tại, nhưng khi Prisma gửi một câu INSERT sai xuống, Postgres vẫn chặn thẳng tay.
+      Ta sẽ chứng minh ở mục 8. Đây chính là lý do Bài 11 bắt đặt ràng buộc <em>trong database</em>
+      chứ không chỉ trong code: <strong>nó chặn được cả những công cụ không biết nó tồn tại.</strong>
+    </p>
+  </div>
+
+  <p>Mở <code>prisma/schema.prisma</code>, Prisma đã tự suy ra toàn bộ quan hệ từ khoá ngoại:</p>
+
+  <div class="code-block">
+    <span class="code-label">prisma/schema.prisma — Prisma tự sinh (trích)</span>
+<pre><code>model courses {
+  id            BigInt        @id @default(autoincrement())
+  title         String
+  level         String
+  current_price Decimal       @db.Decimal(<span class="num">12</span>, <span class="num">0</span>)
+  created_at    DateTime      @default(now()) @db.Timestamptz(<span class="num">6</span>)
+  <span class="cmt">// Ba dòng dưới KHÔNG có trong SQL của bạn — Prisma suy ra từ khoá ngoại</span>
+  <span class="cmt">// của ba bảng kia trỏ về courses. Đây là quan hệ nhìn từ phía "một".</span>
+  enrollments   enrollments[]
+  lessons       lessons[]
+  order_items   order_items[]
+}</code></pre>
+  </div>
+
+  <h2>4. Đặt lại tên cho người đọc — <code>@map</code></h2>
+
+  <p>
+    Tên vừa sinh ra là tên <em>của database</em>: <code>courses</code> số nhiều, <code>current_price</code>
+    gạch dưới. Viết trong TypeScript thì lạc lõng. Prisma cho phép <strong>dùng một tên trong code, một
+    tên khác dưới database</strong>:
+  </p>
+
+  <table class="data">
+    <thead><tr><th>Chỉ thị</th><th>Nghĩa</th></tr></thead>
+    <tbody>
+      <tr><td><code>@@map("courses")</code></td><td>model <code>Course</code> ↔ bảng <code>courses</code></td></tr>
+      <tr><td><code>@map("current_price")</code></td><td>field <code>currentPrice</code> ↔ cột <code>current_price</code></td></tr>
+    </tbody>
+  </table>
+
+  <div class="code-block">
+    <span class="code-label">prisma/schema.prisma — sửa lại model Course</span>
+<pre><code>model Course {
+  id           BigInt       @id @default(autoincrement())
+  title        String
+  level        String
+  <span class="cmt">// Trong code gọi là currentPrice; dưới DB vẫn là cột current_price.</span>
+  currentPrice Decimal      @map(<span class="str">"current_price"</span>) @db.Decimal(<span class="num">12</span>, <span class="num">0</span>)
+  createdAt    DateTime     @default(now()) @map(<span class="str">"created_at"</span>) @db.Timestamptz(<span class="num">6</span>)
+  lessons      Lesson[]
+  orderItems   OrderItem[]
+  enrollments  Enrollment[]
+
+  <span class="cmt">// @@map = tên BẢNG dưới database. Không có dòng này Prisma sẽ đi tìm bảng "Course".</span>
+  @@map(<span class="str">"courses"</span>)
+}</code></pre>
+  </div>
+
+  <div class="callout warn">
+    <div class="ct">⚠️ Đây là đổi tên, KHÔNG phải đổi database</div>
+    <p style="margin-bottom:0">
+      <code>@map</code> chỉ là bảng phiên dịch. Database không hề bị đụng tới — bạn <code>\dt</code>
+      vẫn thấy y nguyên 6 bảng tên cũ. Làm tương tự cho cả 6 model
+      (<code>User</code>, <code>Course</code>, <code>Lesson</code>, <code>Order</code>,
+      <code>OrderItem</code>, <code>Enrollment</code>) rồi sinh lại client:
+    </p>
+  </div>
+
+  <div class="code-block">
+    <span class="code-label">bash</span>
+<pre><code>npx prisma generate</code></pre>
+  </div>
+
+  <div class="code-block">
+    <span class="code-label">kết quả THẬT</span>
+<pre><code>✔ Generated Prisma Client (7.10.0) to ./src/generated/prisma in 40ms</code></pre>
+  </div>
+
+  <div class="callout tip">
+    <div class="ct">🔎 Prisma 7 khác các bài hướng dẫn cũ ở chỗ này</div>
+    <p style="margin-bottom:0">
+      Prisma 5/6 sinh code vào <code>node_modules</code> và bạn import từ <code>@prisma/client</code>.
+      <strong>Prisma 7 sinh vào thư mục dự án của bạn</strong> (<code>src/generated/prisma</code>) —
+      import từ đó. Thấy bài nào bảo <code>import { PrismaClient } from '@prisma/client'</code> thì đó
+      là bài viết cho bản cũ. Thư mục <code>src/generated/</code> nên cho vào <code>.gitignore</code>:
+      nó sinh lại được, và nó rất to.
+    </p>
+  </div>
+
+  <h2>5. <code>PrismaService</code> — cắm Prisma vào vòng đời NestJS</h2>
+
+  <p>
+    Prisma cần <strong>mở kết nối lúc app khởi động</strong> và <strong>đóng lúc app tắt</strong>.
+    Nest có sẵn hai móc cho việc đó. Bọc <code>PrismaClient</code> thành một service để Nest tiêm được
+    vào mọi nơi:
+  </p>
+
+  <div class="code-block">
+    <span class="code-label">src/prisma/prisma.service.ts</span>
+<pre><code><span class="kw">import</span> { Injectable, OnModuleDestroy, OnModuleInit } <span class="kw">from</span> <span class="str">'@nestjs/common'</span>;
+<span class="kw">import</span> { PrismaPg } <span class="kw">from</span> <span class="str">'@prisma/adapter-pg'</span>;
+<span class="cmt">// Prisma 7 sinh client vào dự án, không phải node_modules — nhớ đường dẫn tương đối.</span>
+<span class="kw">import</span> { PrismaClient } <span class="kw">from</span> <span class="str">'../generated/prisma/client'</span>;
+
+<span class="cmt">// extends PrismaClient = service này CÓ SẴN mọi phương thức truy vấn (.course, .user...).</span>
+<span class="cmt">// Nhờ vậy nơi khác chỉ cần tiêm PrismaService, không phải tự new PrismaClient.</span>
+@Injectable()
+<span class="kw">export class</span> <span class="fn">PrismaService</span>
+  <span class="kw">extends</span> PrismaClient
+  <span class="kw">implements</span> OnModuleInit, OnModuleDestroy
+{
+  <span class="fn">constructor</span>() {
+    <span class="cmt">// Từ Prisma 7, PrismaClient KHÔNG tự kết nối nữa — phải đưa "driver adapter",</span>
+    <span class="cmt">// tức là trình điều khiển Postgres thật sự đứng ra mở socket.</span>
+    <span class="kw">super</span>({ adapter: <span class="kw">new</span> <span class="fn">PrismaPg</span>({ connectionString: process.env.DATABASE_URL }) });
+  }
+
+  <span class="cmt">// Nest gọi hàm này SAU khi module đã dựng xong — mở kết nối ở đây.</span>
+  <span class="kw">async</span> <span class="fn">onModuleInit</span>() {
+    <span class="kw">await this</span>.$connect();
+  }
+
+  <span class="cmt">// Và gọi hàm này khi app tắt — trả kết nối về cho Postgres cho sạch.</span>
+  <span class="kw">async</span> <span class="fn">onModuleDestroy</span>() {
+    <span class="kw">await this</span>.$disconnect();
+  }
+}</code></pre>
+  </div>
+
+  <div class="callout danger">
+    <div class="ct">🚨 Quên <code>adapter</code> thì app chết ngay lúc khởi động</div>
+    <p>Tôi đã thử viết <code>super()</code> không tham số như các bài hướng dẫn cũ. Lỗi thật:</p>
+    <div class="code-block" style="margin-top:8px">
+      <span class="code-label">kết quả THẬT</span>
+<pre><code>ERROR [ExceptionHandler] PrismaClientInitializationError:
+PrismaClient was instantiated without any options.
+A driver adapter is required to connect to your database.
+
+  at new PrismaService (src/prisma/prisma.service.ts:5:8)</code></pre>
+    </div>
+    <p style="margin-top:10px; margin-bottom:0">
+      Đây là <strong>thay đổi lớn nhất của Prisma 7</strong> và là lý do copy code từ bài viết cũ sẽ
+      không chạy. Điểm sáng: app <strong>chết lúc khởi động</strong>, không phải lúc có khách — đúng
+      tinh thần fail-fast của Bài 08.
+    </p>
+  </div>
+
+  <div class="code-block">
+    <span class="code-label">src/prisma/prisma.module.ts</span>
+<pre><code><span class="kw">import</span> { Global, Module } <span class="kw">from</span> <span class="str">'@nestjs/common'</span>;
+<span class="kw">import</span> { PrismaService } <span class="kw">from</span> <span class="str">'./prisma.service'</span>;
+
+<span class="cmt">// @Global = khai báo MỘT LẦN, mọi module khác tiêm được luôn mà không phải import lại.</span>
+<span class="cmt">// Chỉ nên dùng cho hạ tầng dùng chung như thế này, đừng lạm dụng cho module nghiệp vụ.</span>
+@Global()
+@Module({
+  providers: [PrismaService],
+  exports: [PrismaService],   <span class="cmt">// không export thì module khác không thấy</span>
+})
+<span class="kw">export class</span> <span class="fn">PrismaModule</span> {}</code></pre>
+  </div>
+
+  <div class="code-block">
+    <span class="code-label">src/app.module.ts — thêm vào imports</span>
+<pre><code><span class="kw">import</span> { PrismaModule } <span class="kw">from</span> <span class="str">'./prisma/prisma.module'</span>;
+
+  imports: [
+    ConfigModule.forRoot({ ... }),
+    LoggerModule.forRoot({ ... }),
+    PrismaModule,      <span class="cmt">// ← thêm dòng này</span>
+    CoursesModule,
+  ],</code></pre>
+  </div>
+
+  <h2>6. Thay mảng giả bằng database thật</h2>
+
+  <div class="code-block">
+    <span class="code-label">src/courses/courses.service.ts</span>
+<pre><code>@Injectable()
+<span class="kw">export class</span> <span class="fn">CoursesService</span> {
+  <span class="kw">private readonly</span> logger = <span class="kw">new</span> <span class="fn">Logger</span>(CoursesService.name);
+
+  <span class="cmt">// Không còn mảng courses trong bộ nhớ. Dữ liệu sống trong Postgres.</span>
+  <span class="fn">constructor</span>(<span class="kw">private readonly</span> prisma: PrismaService) {}
+
+  <span class="cmt">// Mọi truy vấn đều là async — nó đi qua mạng tới Postgres (Bài 03: I/O).</span>
+  <span class="kw">async</span> <span class="fn">findAll</span>(level?: <span class="kw">string</span>) {
+    <span class="kw">return this</span>.prisma.course.findMany({
+      <span class="cmt">// where: undefined = không lọc. Prisma bỏ qua field undefined,</span>
+      <span class="cmt">// nên một dòng này lo cả hai trường hợp có/không có ?level=</span>
+      where: level ? { level } : <span class="kw">undefined</span>,
+      orderBy: { id: <span class="str">'asc'</span> },
+    });
+  }
+
+  <span class="kw">async</span> <span class="fn">findOne</span>(id: <span class="kw">number</span>) {
+    <span class="kw">this</span>.logger.log(<span class="str">`Looking up course id=${id}`</span>);
+    <span class="cmt">// findUnique chỉ tìm theo cột có UNIQUE/PRIMARY KEY — nhanh và rõ ý.</span>
+    <span class="cmt">// BigInt(id) vì cột id là BIGINT: JS number không mang nổi số lớn cỡ đó.</span>
+    <span class="kw">const</span> course = <span class="kw">await this</span>.prisma.course.findUnique({ where: { id: <span class="fn">BigInt</span>(id) } });
+
+    <span class="cmt">// Ném exception y như cũ — Bài 07 lo phần biến nó thành 404.</span>
+    <span class="kw">if</span> (!course) <span class="kw">throw new</span> <span class="fn">NotFoundException</span>(<span class="str">`Course with id=${id} not found`</span>);
+
+    <span class="kw">return</span> course;
+  }
+}</code></pre>
+  </div>
+
+  <p>Chạy thử. Và nó <strong>hỏng</strong>:</p>
+
+  <div class="code-block">
+    <span class="code-label">bash</span>
+<pre><code>curl -s -i http://localhost:<span class="num">3333</span>/courses | head -<span class="num">1</span></code></pre>
+  </div>
+
+  <div class="code-block">
+    <span class="code-label">kết quả THẬT</span>
+<pre><code>HTTP/1.1 500 Internal Server Error</code></pre>
+  </div>
+
+  <div class="code-block">
+    <span class="code-label">trong log — lỗi thật</span>
+<pre><code>ERROR: [58657adc-...] [AllExceptionsFilter] GET /courses
+    TypeError: Do not know how to serialize a BigInt
+        at JSON.stringify (&lt;anonymous&gt;)</code></pre>
+  </div>
+
+  <div class="callout tip">
+    <div class="ct">✅ Dừng một giây — hai thứ bạn viết từ mấy bài trước vừa cứu bạn</div>
+    <p style="margin-bottom:0">
+      Ứng dụng <strong>không sập</strong>. Client nhận một JSON lỗi sạch sẽ có
+      <code>requestId</code> — đó là <strong>filter của Bài 07</strong>. Và trong log là stack trace
+      đầy đủ kèm đúng <code>requestId</code> đó — <strong>Bài 09 + 10</strong>. Bạn tìm ra nguyên
+      nhân trong 10 giây thay vì 10 phút. Hạ tầng làm trước giờ bắt đầu trả lãi.
+    </p>
+  </div>
+
+  <div class="callout why">
+    <div class="ct">💡 Vì sao BigInt không chuyển thành JSON được</div>
+    <p style="margin-bottom:0">
+      JSON là chuẩn ra đời trước kiểu <code>BigInt</code> của JavaScript, nên không có chỗ cho nó —
+      <code>JSON.stringify</code> ném lỗi thay vì đoán bừa. Cùng vấn đề với <code>Decimal</code>
+      (kiểu Prisma dùng cho <code>NUMERIC</code>, chính là thứ giữ tiền chính xác ở Bài 11).
+      <br><br>
+      <strong>Bài học rộng hơn:</strong> đừng trả thẳng object của tầng database ra API. Hai thứ đó
+      là hai hợp đồng khác nhau — đổi tên cột không được phép làm hỏng response của khách.
+    </p>
+  </div>
+
+  <p>Tách một hàm chuyển đổi. Đây cũng là chỗ trả lại đúng tên <code>price</code> mà API vẫn dùng:</p>
+
+  <div class="code-block">
+    <span class="code-label">src/courses/utils/to-course-response.ts</span>
+<pre><code><span class="kw">import type</span> { CourseModel } <span class="kw">from</span> <span class="str">'../../generated/prisma/models'</span>;
+<span class="kw">import type</span> { Course } <span class="kw">from</span> <span class="str">'../course.interface'</span>;
+
+<span class="cmt">// Dịch từ "hàng lấy dưới DB lên" sang "thứ API hứa trả cho khách".</span>
+<span class="kw">export function</span> <span class="fn">toCourseResponse</span>(row: CourseModel): Course {
+  <span class="kw">return</span> {
+    id: <span class="fn">Number</span>(row.id),                    <span class="cmt">// BigInt → number</span>
+    title: row.title,
+    level: row.level,
+    price: row.currentPrice.<span class="fn">toNumber</span>(),      <span class="cmt">// Decimal → number</span>
+    createdAt: row.createdAt.<span class="fn">toISOString</span>(),  <span class="cmt">// Date → chuỗi ISO</span>
+  };
+}</code></pre>
+  </div>
+
+  <div class="code-block">
+    <span class="code-label">src/courses/courses.service.ts — dùng hàm chuyển đổi</span>
+<pre><code>  <span class="kw">async</span> <span class="fn">findAll</span>(level?: <span class="kw">string</span>): <span class="fn">Promise</span>&lt;Course[]&gt; {
+    <span class="kw">const</span> rows = <span class="kw">await this</span>.prisma.course.findMany({
+      where: level ? { level } : <span class="kw">undefined</span>,
+      orderBy: { id: <span class="str">'asc'</span> },
+    });
+
+    <span class="kw">return</span> rows.map(toCourseResponse);
+  }</code></pre>
+  </div>
+
+  <div class="callout warn">
+    <div class="ct">⚠️ <code>Number(row.id)</code> — an toàn tới khi nào?</div>
+    <p style="margin-bottom:0">
+      <code>number</code> của JS giữ chính xác được số nguyên tới khoảng <strong>9 triệu tỷ</strong>.
+      Với bảng khoá học thì thoải mái. Nhưng đây là một <em>giả định</em>, không phải chân lý — hệ thống
+      nào có id vượt ngưỡng đó thì phải trả id dạng <strong>chuỗi</strong>. Biết mình đang giả định
+      cái gì, đó mới là khác biệt.
+    </p>
+  </div>
+
+  <h2>7. Chứng minh nó thật sự đọc database</h2>
+
+  <p>
+    Dữ liệu đúng chưa chắc là bằng chứng — biết đâu vẫn là mảng cũ. Phép thử dứt điểm:
+    <strong>sửa thẳng trong database, không restart app</strong>.
+  </p>
+
+  <div class="code-block">
+    <span class="code-label">bash — cửa sổ Terminal khác</span>
+<pre><code>PGPASSWORD=elearning_dev_pw psql -h localhost -p <span class="num">5433</span> -U elearning -d elearning -c <span class="str">"
+UPDATE courses SET current_price = 299000,
+                   title = 'NestJS Fundamentals (SALE)'
+WHERE id = 1;"</span></code></pre>
+  </div>
+
+  <div class="code-block">
+    <span class="code-label">bash — gọi lại ngay, KHÔNG restart</span>
+<pre><code>curl -s http://localhost:<span class="num">3333</span>/courses/<span class="num">1</span></code></pre>
+  </div>
+
+  <div class="code-block">
+    <span class="code-label">kết quả THẬT</span>
+<pre><code>{"id":1,"title":"NestJS Fundamentals (SALE)","level":"beginner",
+ "price":299000,"createdAt":"2026-08-28T09:47:38.820Z"}</code></pre>
+  </div>
+
+  <p>
+    Đổi ngay. Bảy bài vừa rồi mọi thứ biến mất mỗi lần restart; từ giờ dữ liệu <strong>sống lâu hơn
+    tiến trình</strong>. Đó là ranh giới thật giữa một bài tập và một sản phẩm.
+  </p>
+
+  <h2>8. Ghi vào database — và hai lớp chặn dữ liệu bẩn</h2>
+
+  <div class="code-block">
+    <span class="code-label">src/courses/courses.service.ts</span>
+<pre><code>  <span class="kw">async</span> <span class="fn">create</span>(dto: CreateCourseDto): <span class="fn">Promise</span>&lt;Course&gt; {
+    <span class="kw">const</span> created = <span class="kw">await this</span>.prisma.course.create({
+      <span class="cmt">// Ánh xạ tay từng field: DTO nói "price", database nói "currentPrice".</span>
+      <span class="cmt">// Đừng ...spread cả dto vào đây — đó là lỗ hổng mass assignment của Bài 06.</span>
+      data: { title: dto.title, level: dto.level, currentPrice: dto.price },
+    });
+
+    <span class="kw">return</span> <span class="fn">toCourseResponse</span>(created);
+  }</code></pre>
+  </div>
+
+  <div class="code-block">
+    <span class="code-label">bash</span>
+<pre><code>curl -s -X POST http://localhost:<span class="num">3333</span>/courses \
+  -H <span class="str">'Content-Type: application/json'</span> \
+  -d <span class="str">'{"title":"Docker for Backend","level":"advanced","price":599000}'</span></code></pre>
+  </div>
+
+  <div class="code-block">
+    <span class="code-label">kết quả THẬT — và lần này nó nằm lại trong DB</span>
+<pre><code>{"id":3,"title":"Docker for Backend","level":"advanced","price":599000,...}</code></pre>
+  </div>
+
+  <div class="code-block">
+    <span class="code-label">kiểm bằng psql — dữ liệu thật, không phải bộ nhớ</span>
+<pre><code> id |           title            |  level   | current_price
+----+----------------------------+----------+---------------
+  1 | NestJS Fundamentals (SALE) | beginner |        299000
+  2 | Postgres for Backend       | advanced |        799000
+  3 | Docker for Backend         | advanced |        599000</code></pre>
+  </div>
+
+  <h3>Thí nghiệm: hai lớp bảo vệ, chặn ở hai chỗ khác nhau</h3>
+
+  <p>Gửi một <code>level</code> không hợp lệ:</p>
+
+  <div class="code-block">
+    <span class="code-label">bash</span>
+<pre><code>curl -s -X POST http://localhost:<span class="num">3333</span>/courses \
+  -H <span class="str">'Content-Type: application/json'</span> \
+  -d <span class="str">'{"title":"Khoa bay","level":"trung-cap","price":100000}'</span></code></pre>
+  </div>
+
+  <div class="code-block">
+    <span class="code-label">kết quả THẬT — lớp 1: DTO chặn (Bài 06)</span>
+<pre><code>{"statusCode":400,"error":"Bad Request",
+ "messages":["level must be beginner or advanced"], ...}</code></pre>
+  </div>
+
+  <p>
+    Giờ <strong>tạm</strong> gỡ <code>@IsIn</code> khỏi <code>CreateCourseDto</code> (thay bằng
+    <code>@IsString()</code>) — giả lập tình huống ai đó viết code cẩu thả, hoặc một script chạy tay
+    đi vòng qua API. Gửi lại đúng request đó:
+  </p>
+
+  <div class="code-block">
+    <span class="code-label">kết quả THẬT — lớp 2: Postgres chặn</span>
+<pre><code>HTTP 500
+{"statusCode":500,"error":"Internal Server Error", ...}
+
+<span class="cmt"># trong log:</span>
+PrismaClientKnownRequestError
+  ... violates check constraint "courses_level_check"</code></pre>
+  </div>
+
+  <div class="callout why">
+    <div class="ct">💡 Đây là bằng chứng cho toàn bộ Bài 11</div>
+    <p>
+      Prisma <strong>không biết</strong> ràng buộc <code>courses_level_check</code> tồn tại — nó đã
+      cảnh báo đúng như thế ở mục 3. Vậy mà dữ liệu bẩn <strong>vẫn không vào được</strong>.
+      Vì ràng buộc sống trong database, và mọi con đường đều phải đi qua database.
+    </p>
+    <p style="margin-bottom:0">
+      Chú ý sự khác nhau về <em>chất lượng</em>: DTO cho <strong>400 kèm câu giải thích cho người
+      dùng</strong>; database cho <strong>500 khô khốc</strong>. Nên: DTO là lớp <em>giao tiếp</em>,
+      ràng buộc DB là lớp <em>không ai đi vòng được</em>. Cần cả hai, và chúng làm hai việc khác nhau.
+      <strong>Nhớ gắn <code>@IsIn</code> trở lại sau khi thử xong.</strong>
+    </p>
+  </div>
+
+  <h2>9. Migration — git cho cấu trúc database</h2>
+
+  <p>
+    Database của bạn đã có sẵn 6 bảng và dữ liệu thật, nhưng Prisma thì <em>chưa biết gì</em> về lịch
+    sử đó. Chạy thẳng <code>migrate dev</code> lúc này, Prisma thấy database "lạ" và có thể đòi
+    <strong>xoá sạch làm lại</strong>. Phải nói cho nó biết trước: <em>"trạng thái hiện tại coi như
+    đã áp dụng rồi"</em>. Bước đó gọi là <strong>baseline</strong>.
+  </p>
+
+  <div class="code-block">
+    <span class="code-label">bash — baseline, chỉ làm MỘT LẦN trong đời dự án</span>
+<pre><code><span class="cmt"># 1. Sinh file SQL mô tả toàn bộ schema hiện tại</span>
+mkdir -p prisma/migrations/0_init
+npx prisma migrate diff \
+  --from-empty --to-schema prisma/schema.prisma --script \
+  &gt; prisma/migrations/0_init/migration.sql
+
+<span class="cmt"># 2. Đánh dấu "migration này coi như đã chạy rồi" — KHÔNG thực thi nó</span>
+npx prisma migrate resolve --applied 0_init</code></pre>
+  </div>
+
+  <div class="code-block">
+    <span class="code-label">kết quả THẬT</span>
+<pre><code>Migration 0_init marked as applied.
+
+$ npx prisma migrate status
+1 migration found in prisma/migrations
+Database schema is up to date!</code></pre>
+  </div>
+
+  <div class="callout warn">
+    <div class="ct">⚠️ Cờ này vừa đổi tên ở Prisma 7</div>
+    <p style="margin-bottom:0">
+      Bài viết cũ dùng <code>--to-schema-datamodel</code>. Prisma 7 đổi thành <code>--to-schema</code>,
+      và báo lỗi thẳng nếu bạn gõ tên cũ. Tôi đã đâm đúng vào đấy khi soạn bài.
+    </p>
+  </div>
+
+  <h3>Migration thật đầu tiên</h3>
+
+  <p>Chính là câu hỏi Bài 11 để lại: thêm cột <code>description</code>.</p>
+
+  <div class="code-block">
+    <span class="code-label">prisma/schema.prisma — thêm một dòng vào model Course</span>
+<pre><code>  level        String
+  description  String?      <span class="cmt">// dấu ? = cho phép NULL. Xem cảnh báo bên dưới.</span></code></pre>
+  </div>
+
+  <div class="code-block">
+    <span class="code-label">bash</span>
+<pre><code>npx prisma migrate dev --name add_course_description</code></pre>
+  </div>
+
+  <div class="code-block">
+    <span class="code-label">kết quả THẬT</span>
+<pre><code>Applying migration `20260828095236_add_course_description`
+
+prisma/migrations/
+  └─ 20260828095236_add_course_description/
+    └─ migration.sql
+
+Your database is now in sync with your schema.</code></pre>
+  </div>
+
+  <div class="code-block">
+    <span class="code-label">nội dung file vừa sinh — đọc được, sửa được, commit được</span>
+<pre><code>-- AlterTable
+ALTER TABLE "courses" ADD COLUMN "description" TEXT;</code></pre>
+  </div>
+
+  <div class="code-block">
+    <span class="code-label">dữ liệu cũ có sao không? (kết quả THẬT)</span>
+<pre><code> id |           title            | description
+----+----------------------------+-------------
+  1 | NestJS Fundamentals (SALE) |
+  2 | Postgres for Backend       |
+  3 | Docker for Backend         |
+(3 rows)</code></pre>
+  </div>
+
+  <p>
+    Ba dòng còn nguyên, có thêm cột mới để trống. Đó là toàn bộ ý nghĩa của migration:
+    <strong>đổi cấu trúc mà không đụng dữ liệu</strong>.
+  </p>
+
+  <table class="data">
+    <thead><tr><th>Git</th><th>Prisma migrate</th></tr></thead>
+    <tbody>
+      <tr><td>commit</td><td>một thư mục migration, có dấu thời gian</td></tr>
+      <tr><td>lịch sử commit</td><td><code>prisma/migrations/</code> — <strong>phải commit vào git</strong></td></tr>
+      <tr><td><code>git log</code></td><td><code>npx prisma migrate status</code></td></tr>
+      <tr><td>HEAD đang ở đâu</td><td>bảng <code>_prisma_migrations</code> trong chính database</td></tr>
+    </tbody>
+  </table>
+
+  <div class="callout danger">
+    <div class="ct">🚨 Ba điều phải nhớ về migration</div>
+    <p>
+      <strong>Một — thêm cột NOT NULL vào bảng đã có dữ liệu là hỏng.</strong> Postgres hỏi:
+      3 dòng đang có thì điền gì vào cột mới? Không trả lời được thì nó từ chối. Cách đúng:
+      thêm cột cho phép NULL (<code>String?</code>), điền dữ liệu dần, rồi mới siết lại.
+    </p>
+    <p>
+      <strong>Hai — <code>migrate dev</code> chỉ dùng ở máy mình.</strong> Trên production dùng
+      <code>prisma migrate deploy</code>: nó chỉ áp dụng file có sẵn, không tự sinh, không bao giờ
+      đòi reset. Gõ nhầm <code>dev</code> trên production là chuyện kể lại cả đời. Bài 17 sẽ đào sâu.
+    </p>
+    <p style="margin-bottom:0">
+      <strong>Ba — migration Prisma sinh ra <em>không</em> đầy đủ bằng SQL bạn viết ở Bài 11.</strong>
+      Tôi đã đếm trong file <code>0_init</code> vừa sinh:
+    </p>
+    <div class="code-block" style="margin-top:8px">
+      <span class="code-label">so sánh THẬT — schema.sql của bạn vs migration Prisma sinh</span>
+<pre><code>Giữ được:  6 FOREIGN KEY · 3 ON DELETE CASCADE · 3 ON DELETE RESTRICT · 4 UNIQUE
+
+MẤT:       5 ràng buộc CHECK          (level, giá ≥ 0, status...)
+           GENERATED ALWAYS AS IDENTITY  → thay bằng BIGSERIAL (tự gán id được)</code></pre>
+    </div>
+    <p style="margin-top:10px; margin-bottom:0">
+      Trên database <em>hiện tại</em> của bạn thì 5 ràng buộc CHECK vẫn còn nguyên (tôi đã kiểm lại
+      sau khi migrate) — vì migration chỉ chạy đúng câu <code>ALTER TABLE</code> kia. Nhưng chúng
+      <strong>không nằm trong lịch sử migration</strong>. Ai dựng database mới từ đầu bằng
+      <code>migrate deploy</code> sẽ có một database <em>yếu hơn</em> của bạn, và không ai nhận ra.
+      Cách xử lý: <strong>tự tay thêm <code>CHECK</code> vào file migration</strong> — file SQL đó
+      sửa được, và bạn nên sửa. Đây là lúc biết SQL thuần trả tiền lại cho bạn (Module 3.5).
+    </p>
+  </div>
+
+  <div class="callout tip">
+    <div class="ct">🧹 Dọn nốt hai thứ còn sót</div>
+    <p style="margin-bottom:0">
+      <strong>1.</strong> Xoá route <code>@Get('boom')</code> trong <code>courses.controller.ts</code> —
+      nó là đồ thí nghiệm của Bài 07 và vẫn còn đó.
+      <br>
+      <strong>2.</strong> Thêm <code>src/generated/</code> vào <code>.gitignore</code>; giữ
+      <code>prisma/migrations/</code> <em>trong</em> git.
+    </p>
+  </div>
+
+  <div class="quiz">
+    <h3>🧠 Kiểm tra nhanh (bấm để có phản hồi ngay)</h3>
+
+    <div class="q">Câu 1. Đã có sẵn 6 bảng trong Postgres, bước đầu tiên với Prisma là gì?</div>
+    <button class="opt" data-correct="false" data-explain="Đó là chiều ngược lại, dùng khi bắt đầu từ số không. Bạn đã có bảng và dữ liệu thật — viết schema.prisma tay rồi migrate là mời Prisma đòi xoá làm lại.">A. Viết <code>schema.prisma</code> tay rồi <code>migrate dev</code></button>
+    <button class="opt" data-correct="true" data-explain="Đúng. db pull đọc ngược từ database lên, tự sinh 6 model và suy ra toàn bộ quan hệ từ khoá ngoại. Đi đúng chiều với thực tế bạn đang có.">B. <code>prisma db pull</code> — để Prisma đọc database và tự viết schema</button>
+    <button class="opt" data-correct="false" data-explain="Không cần và không nên. Dữ liệu là thứ quý nhất; công cụ phải thích nghi với dữ liệu, không phải ngược lại.">C. Xoá hết bảng rồi để Prisma tạo lại cho đồng bộ</button>
+    <div class="feedback"></div>
+
+    <div class="q">Câu 2. Prisma cảnh báo "không hỗ trợ check constraints". Vậy 5 ràng buộc <code>CHECK</code> của bạn còn tác dụng không?</div>
+    <button class="opt" data-correct="true" data-explain="Đúng — và bạn đã tự chứng minh: gỡ @IsIn khỏi DTO rồi POST level='trung-cap', Postgres vẫn chặn với 'violates check constraint courses_level_check'. Ràng buộc sống trong database, mà mọi đường ghi đều phải đi qua database. Đây là lý do Bài 11 bắt đặt ràng buộc ở tầng DB.">A. Còn nguyên — chúng sống trong Postgres, Prisma chỉ là khách đi qua</button>
+    <button class="opt" data-correct="false" data-explain="Không. Prisma không có quyền và cũng không hề gỡ ràng buộc nào. Nó chỉ nói 'tôi không diễn đạt được cái này trong schema của tôi'.">B. Mất tác dụng, vì Prisma không sinh chúng ra</button>
+    <button class="opt" data-correct="false" data-explain="Ngược lại — DTO là lớp DỄ đi vòng nhất (một script, một đồng nghiệp, một dòng code cẩu thả). Ràng buộc DB mới là lớp không ai vòng được.">C. Chỉ còn khi request đi qua DTO</button>
+    <div class="feedback"></div>
+
+    <div class="q">Câu 3. <code>TypeError: Do not know how to serialize a BigInt</code> — nguyên nhân gốc là gì?</div>
+    <button class="opt" data-correct="false" data-explain="Prisma làm đúng: cột là BIGINT nên nó trả BigInt để không mất chính xác. Sai là ở chỗ ta ném thẳng object của tầng DB ra API.">A. Prisma trả sai kiểu, phải sửa schema</button>
+    <button class="opt" data-correct="true" data-explain="Đúng. JSON là chuẩn có trước BigInt nên không có chỗ cho nó, và JSON.stringify ném lỗi thay vì đoán bừa. Bài học rộng hơn: object tầng database và response API là hai hợp đồng khác nhau — luôn có một hàm chuyển đổi ở giữa.">B. JSON không biểu diễn được BigInt — và ta trả thẳng object DB ra API</button>
+    <button class="opt" data-correct="false" data-explain="Không liên quan. Lỗi xảy ra lúc chuyển kết quả thành JSON, tức là sau khi truy vấn đã thành công.">C. Thiếu <code>await</code> nên trả về Promise</button>
+    <div class="feedback"></div>
+
+    <div class="q">Câu 4. Vì sao phải <em>baseline</em> trước khi dùng <code>migrate dev</code>?</div>
+    <button class="opt" data-correct="false" data-explain="Không phải chuyện tốc độ. Nó là chuyện Prisma có hiểu đúng trạng thái database của bạn hay không.">A. Để migration chạy nhanh hơn</button>
+    <button class="opt" data-correct="true" data-explain="Đúng. Prisma theo dõi trạng thái qua bảng _prisma_migrations. Database của bạn có bảng nhưng lịch sử trống, nên Prisma coi đó là bất thường và có thể đòi reset. Baseline nghĩa là: 'trạng thái hiện tại tương đương migration 0_init, coi như đã chạy'.">B. Vì lịch sử migration đang trống trong khi database đã có bảng — Prisma có thể đòi xoá làm lại</button>
+    <button class="opt" data-correct="false" data-explain="Baseline không sinh dữ liệu. Nó chỉ ghi một dòng vào _prisma_migrations nói rằng migration đó coi như đã áp dụng.">C. Để Prisma tạo dữ liệu mẫu</button>
+    <div class="feedback"></div>
+
+    <div class="q">Câu 5. Thêm cột <code>NOT NULL</code> vào bảng đang có 3 dòng dữ liệu thì sao?</div>
+    <button class="opt" data-correct="false" data-explain="Postgres không tự bịa dữ liệu. Nó không có cách nào biết giá trị đúng cho 3 dòng cũ.">A. Postgres tự điền chuỗi rỗng</button>
+    <button class="opt" data-correct="true" data-explain="Đúng. 3 dòng cũ sẽ vi phạm NOT NULL ngay lúc thêm cột, nên Postgres từ chối. Quy trình an toàn có ba bước: thêm cột cho phép NULL → điền dữ liệu cho các dòng cũ → rồi mới ALTER thành NOT NULL. Bài 17 sẽ đào sâu kiểu migration nhiều bước này.">B. Migration thất bại — 3 dòng cũ không có giá trị cho cột đó</button>
+    <button class="opt" data-correct="false" data-explain="Migration KHÔNG BAO GIỜ tự xoá dữ liệu để cho vừa. Nếu nó làm thế thì không ai dám chạy migration trên production nữa.">C. 3 dòng cũ bị xoá cho khớp cấu trúc mới</button>
+    <div class="feedback"></div>
+  </div>
+
+  <div class="callout tip">
+    <div class="ct">✅ Dự án của bạn vừa lớn thêm</div>
+    <ul class="checklist">
+      <li><code>/courses</code> đọc và ghi <strong>Postgres thật</strong> — dữ liệu sống lâu hơn tiến trình</li>
+      <li><code>PrismaService</code> cắm đúng vòng đời Nest: kết nối lúc lên, ngắt lúc tắt</li>
+      <li>Hàm chuyển đổi tách rõ <em>hàng dưới DB</em> khỏi <em>response API</em></li>
+      <li>Đã chứng minh hai lớp bảo vệ chặn ở hai chỗ: DTO 400, ràng buộc DB 500</li>
+      <li><strong>Migration đầu tiên chạy được</strong> — thêm cột mà 3 dòng dữ liệu còn nguyên</li>
+      <li>Biết migration Prisma sinh ra <em>thiếu</em> gì so với SQL bạn viết tay</li>
+    </ul>
+  </div>
+
+  <h2>10. Câu hỏi tư duy (bắc cầu sang Bài 13)</h2>
+
+  <p>
+    Giờ thêm một yêu cầu rất đời thường: <code>/courses</code> phải trả <strong>kèm danh sách bài học
+    của từng khoá</strong>. Cách nghĩ tự nhiên nhất:
+  </p>
+
+  <div class="code-block">
+    <span class="code-label">nghe rất hợp lý — và đây là cái bẫy</span>
+<pre><code><span class="kw">const</span> courses = <span class="kw">await</span> prisma.course.findMany();          <span class="cmt">// 1 truy vấn</span>
+
+<span class="kw">for</span> (<span class="kw">const</span> course <span class="kw">of</span> courses) {
+  course.lessons = <span class="kw">await</span> prisma.lesson.findMany({          <span class="cmt">// 1 truy vấn MỖI khoá</span>
+    where: { courseId: course.id },
+  });
+}</code></pre>
+  </div>
+
+  <p>
+    Với 3 khoá học: 4 truy vấn, chạy trong tích tắc, test xanh, code review qua. Với
+    <strong>500 khoá học: 501 truy vấn</strong> cho một lần gọi API.
+  </p>
+  <p>
+    <em>Vì sao thứ chạy hoàn hảo trên máy bạn lại làm sập production?</em> Và quan trọng hơn:
+    <em>làm sao nhìn thấy nó trước khi khách nhìn thấy?</em>
+  </p>
+  <p style="margin-bottom:0">
+    Cái bẫy này có tên riêng — <strong>N+1</strong> — và là câu hỏi phỏng vấn backend phổ biến bậc nhất.
+    Bài 13.
+  </p>
+
+  <h2>Nguồn chính chủ</h2>
+  <p class="meta-line">
+    <a href="https://www.prisma.io/docs" target="_blank">Prisma docs</a> ·
+    <a href="https://www.prisma.io/docs/orm/prisma-schema/introspection" target="_blank">Introspection (db pull)</a> ·
+    <a href="https://www.prisma.io/docs/orm/overview/databases/database-drivers" target="_blank">Driver adapters</a> ·
+    <a href="https://www.prisma.io/docs/orm/prisma-migrate/workflows/baselining" target="_blank">Baselining</a> ·
+    <a href="https://www.prisma.io/docs/orm/prisma-schema/data-model/models#mapping-model-names-to-tables-or-collections" target="_blank">@map / @@map</a> ·
+    <a href="https://docs.nestjs.com/recipes/prisma" target="_blank">NestJS + Prisma</a>
+  </p>
+
+  <div class="navbar">
+    <a href="0011-thiet-ke-schema.html">← Bài 11</a>
+    <a href="index.html">🏠 Mục lục</a>
+    <a class="disabled">Bài 13 →</a>
+  </div>
+
+</div>
+<script src="lesson-enhance.js"></script>
+</body>
+</html>
