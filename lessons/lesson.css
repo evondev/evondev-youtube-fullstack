@@ -1,18 +1,18 @@
 /* ===== lesson.css — style dùng chung cho mọi bài học SQL ===== */
 :root {
-  --bg: #0f1117;
-  --bg-soft: #171a23;
-  --bg-card: #1c2030;
-  --border: #2a3042;
-  --text: #e6e9f0;
-  --text-soft: #aab2c5;
-  --text-dim: #6b7690;
-  --accent: #38bdf8;      /* xanh dương sáng — màu chủ đạo */
-  --accent-2: #a78bfa;    /* tím — phụ */
-  --green: #4ade80;
-  --amber: #fbbf24;
-  --red: #f87171;
-  --pink: #f472b6;
+  --bg: #1b1e28;
+  --bg-soft: #202430;
+  --bg-card: #252b37;
+  --border: #303340;
+  --text: #e4f0fb;
+  --text-soft: #a6accd;
+  --text-dim: #767c9d;
+  --accent: #5DE4c7;      /* brightMint — màu chủ đạo của Poimandres */
+  --accent-2: #ADD7FF;    /* tím — phụ */
+  --green: #5fb3a1;
+  --amber: #fffac2;
+  --red: #d0679d;
+  --pink: #f087bd;
   --radius: 14px;
   --mono: "JetBrains Mono", "SF Mono", "Fira Code", ui-monospace, Menlo, monospace;
   --sans: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
@@ -25,7 +25,7 @@ html { scroll-behavior: smooth; }
 body {
   margin: 0;
   font-family: var(--sans);
-  background: radial-gradient(1200px 600px at 80% -10%, #1d2433 0%, var(--bg) 55%);
+  background: radial-gradient(1200px 600px at 80% -10%, #252b37 0%, var(--bg) 55%);
   color: var(--text);
   line-height: 1.7;
   font-size: 17px;
@@ -38,8 +38,8 @@ body {
 .lesson-tag {
   display: inline-flex; align-items: center; gap: 8px;
   font-size: 13px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase;
-  color: var(--accent); background: rgba(56,189,248,.1);
-  border: 1px solid rgba(56,189,248,.25); padding: 5px 12px; border-radius: 999px;
+  color: var(--accent); background: rgba(93,228,199,.12);
+  border: 1px solid rgba(93,228,199,.25); padding: 5px 12px; border-radius: 999px;
 }
 h1 { font-size: 2.1rem; line-height: 1.2; margin: 18px 0 8px; letter-spacing: -.02em; }
 .subtitle { color: var(--text-soft); font-size: 1.1rem; margin: 0 0 8px; }
@@ -51,12 +51,12 @@ h2 {
 }
 h3 { font-size: 1.2rem; margin: 30px 0 10px; color: #f0f2f7; }
 p { margin: 14px 0; color: var(--text); }
-a { color: var(--accent); text-decoration: none; border-bottom: 1px solid rgba(56,189,248,.3); }
+a { color: var(--accent); text-decoration: none; border-bottom: 1px solid rgba(93,228,199,.3); }
 a:hover { border-bottom-color: var(--accent); }
 strong { color: #fff; font-weight: 650; }
 ul, ol { padding-left: 22px; }
 li { margin: 7px 0; }
-code { font-family: var(--mono); font-size: .9em; background: #232838; color: #ffd9a8; padding: 2px 6px; border-radius: 6px; }
+code { font-family: var(--mono); font-size: .9em; background: #252b37; color: #5DE4c7; padding: 2px 6px; border-radius: 6px; }
 
 /* ----- khối code + nút copy ----- */
 .code-block { position: relative; margin: 20px 0; }
@@ -64,30 +64,30 @@ code { font-family: var(--mono); font-size: .9em; background: #232838; color: #f
 .code-block > .code-label {
   display: flex; align-items: center; gap: 12px;
   font-family: var(--mono); font-size: 12px; color: var(--text-dim);
-  background: #11141d; border: 1px solid var(--border); border-bottom: none;
+  background: #202430; border: 1px solid var(--border); border-bottom: none;
   padding: 6px 10px 6px 14px; border-radius: 10px 10px 0 0;
 }
 pre {
-  margin: 0; background: #11141d; border: 1px solid var(--border);
+  margin: 0; background: #202430; border: 1px solid var(--border);
   border-radius: 10px; padding: 18px 18px; overflow-x: auto;
   font-family: var(--mono); font-size: 14.5px; line-height: 1.65;
 }
 /* Khi có header phía trên: bỏ bo góc trên + viền trên của pre cho liền mạch */
 .code-block > .code-label + pre { border-top: none; border-radius: 0 0 10px 10px; }
-pre code { background: none; color: #e6e9f0; padding: 0; font-size: inherit; }
-/* tô màu SQL nhẹ qua class thủ công */
-.kw  { color: #7dd3fc; font-weight: 600; }   /* keyword */
-.fn  { color: #c4b5fd; }                       /* function */
-.str { color: #86efac; }                       /* string */
-.num { color: #fca5a5; }                        /* number */
-.cmt { color: #5b6478; font-style: italic; }   /* comment tiếng Việt */
-.tbl { color: #fcd34d; }                        /* tên bảng/cột nhấn */
+pre code { background: none; color: #a6accd; padding: 0; font-size: inherit; }
+/* tô màu token theo theme Poimandres (drcmda/poimandres-theme, scope thật trong theme JSON) */
+.kw  { color: #91B4D5; font-weight: 600; }   /* storage.type, keyword.operator */
+.fn  { color: #ADD7FF; }                       /* entity.name.function */
+.str { color: #5DE4c7; }                       /* string — brightMint */
+.num { color: #5fb3a1; }                        /* constant.numeric — lowerMint */
+.cmt { color: #767c9d; font-style: italic; }   /* comment tiếng Việt */
+.tbl { color: #e4f0fb; }                        /* support.type.object — tên bảng/cột nhấn */
 
 /* Nút Copy nằm GỌN trong thanh header, đẩy sang phải, cách lề một chút */
 .copy-btn {
   margin-left: auto; flex-shrink: 0; line-height: 1;
   font-family: var(--sans); font-size: 12px; font-weight: 600;
-  color: var(--text-soft); background: #232838; border: 1px solid var(--border);
+  color: var(--text-soft); background: #252b37; border: 1px solid var(--border);
   padding: 4px 10px; border-radius: 7px; cursor: pointer; transition: all .15s;
 }
 .copy-btn:hover { color: #fff; border-color: var(--accent); }
@@ -101,15 +101,15 @@ pre code { background: none; color: #e6e9f0; padding: 0; font-size: inherit; }
 .callout .ct { font-weight: 700; margin-bottom: 6px; display: flex; align-items: center; gap: 8px; }
 .callout p:first-of-type { margin-top: 0; } .callout p:last-child { margin-bottom: 0; }
 .callout.why    { border-left: 4px solid var(--accent); }
-.callout.warn   { border-left: 4px solid var(--amber); background: rgba(251,191,36,.06); }
-.callout.danger { border-left: 4px solid var(--red);   background: rgba(248,113,113,.06); }
-.callout.tip    { border-left: 4px solid var(--green); background: rgba(74,222,128,.06); }
-.callout.bridge { border-left: 4px solid var(--accent-2); background: rgba(167,139,250,.07); }
+.callout.warn   { border-left: 4px solid var(--amber); background: rgba(255,250,194,.06); }
+.callout.danger { border-left: 4px solid var(--red);   background: rgba(208,103,157,.08); }
+.callout.tip    { border-left: 4px solid var(--green); background: rgba(95,179,161,.08); }
+.callout.bridge { border-left: 4px solid var(--accent-2); background: rgba(173,215,255,.09); }
 
 /* ----- bảng minh hoạ dữ liệu ----- */
 table.data { border-collapse: collapse; width: 100%; margin: 18px 0; font-size: 14.5px; }
 table.data th, table.data td { border: 1px solid var(--border); padding: 8px 12px; text-align: left; }
-table.data th { background: #20283b; color: #cbd5e1; font-weight: 600; }
+table.data th { background: #252b37; color: var(--text-soft); font-weight: 600; }
 table.data td { font-family: var(--mono); color: var(--text-soft); }
 table.data tr:nth-child(even) td { background: rgba(255,255,255,.015); }
 .nullcell { color: var(--text-dim); font-style: italic; }
@@ -124,18 +124,18 @@ table.data tr:nth-child(even) td { background: rgba(255,255,255,.015); }
   color: var(--text); font-family: var(--sans); font-size: 15px; cursor: pointer; transition: all .15s;
 }
 .quiz .opt:hover { border-color: var(--accent); }
-.quiz .opt.correct { border-color: var(--green); background: rgba(74,222,128,.12); color: #d9f9e3; }
-.quiz .opt.wrong   { border-color: var(--red);   background: rgba(248,113,113,.1);  color: #fbd5d5; }
+.quiz .opt.correct { border-color: var(--green); background: rgba(95,179,161,.14); color: #cfeee4; }
+.quiz .opt.wrong   { border-color: var(--red);   background: rgba(208,103,157,.12);  color: #f6d4e5; }
 .quiz .opt.disabled { pointer-events: none; opacity: .9; }
 .quiz .feedback { margin-top: 12px; padding: 12px 14px; border-radius: 10px; font-size: 14.5px; display: none; }
 .quiz .feedback.show { display: block; }
-.quiz .feedback.good { background: rgba(74,222,128,.1); border: 1px solid var(--green); }
-.quiz .feedback.bad  { background: rgba(248,113,113,.1); border: 1px solid var(--red); }
+.quiz .feedback.good { background: rgba(95,179,161,.12); border: 1px solid var(--green); }
+.quiz .feedback.bad  { background: rgba(208,103,157,.12); border: 1px solid var(--red); }
 
 /* ----- điều hướng cuối bài ----- */
 .next-box {
   margin: 40px 0 10px; padding: 20px 22px; border-radius: var(--radius);
-  background: linear-gradient(135deg, rgba(56,189,248,.1), rgba(167,139,250,.08));
+  background: linear-gradient(135deg, rgba(93,228,199,.12), rgba(173,215,255,.09));
   border: 1px solid var(--border);
 }
 .next-box .nl { font-size: 13px; text-transform: uppercase; letter-spacing: .05em; color: var(--accent); font-weight: 700; }
