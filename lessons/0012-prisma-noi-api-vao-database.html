@@ -224,6 +224,59 @@ does not fully support check constraints.
 }</code></pre>
   </div>
 
+  <div class="callout why">
+    <div class="ct">💡 Ba dòng <code>lessons</code>, <code>orderItems</code>, <code>enrollments</code> — vì sao chúng KHÔNG có <code>@map</code></div>
+    <p>
+      Vì chúng <strong>không phải cột</strong>. Đó là <em>quan hệ</em> — Prisma sinh ra để bạn đi từ
+      <code>Course</code> sang <code>Lesson</code> trong code. Dưới database không có cột nào tên
+      <code>lessons</code> cả (thứ tồn tại thật là <code>lessons.course_id</code> ở bảng bên kia).
+      Không có cột thì không có gì để ánh xạ, nên không cần <code>@map</code>.
+    </p>
+    <p>Kiểm chứng: so hai schema chỉ khác đúng tên field quan hệ, xem Prisma sinh ra SQL gì:</p>
+    <div class="code-block" style="margin-top:8px">
+      <span class="code-label">kết quả THẬT — đổi tên field quan hệ</span>
+<pre><code>-- This is an empty migration.</code></pre>
+    </div>
+    <p style="margin-top:10px">Đối chứng — bỏ <code>@map</code> khỏi <code>currentPrice</code>, một field thật:</p>
+    <div class="code-block" style="margin-top:8px">
+      <span class="code-label">kết quả THẬT — và đây là mất dữ liệu</span>
+<pre><code><span class="kw">ALTER TABLE</span> <span class="tbl">"courses"</span> <span class="kw">DROP COLUMN</span> <span class="str">"current_price"</span>,
+<span class="kw">ADD COLUMN</span> <span class="str">"currentPrice"</span> DECIMAL(<span class="num">12</span>,<span class="num">0</span>) <span class="kw">NOT NULL</span>;</code></pre>
+    </div>
+    <p style="margin-top:10px; margin-bottom:0">
+      <code>DROP COLUMN</code> — bay sạch cột giá. Đó chính là lý do field thật <strong>bắt buộc</strong>
+      phải có <code>@map</code>, còn quan hệ thì không.
+    </p>
+  </div>
+
+  <div class="callout danger">
+    <div class="ct">🚨 Tên bên trái tuỳ bạn, tên KIỂU bên phải thì bắt buộc</div>
+    <div class="code-block" style="margin-top:8px">
+      <span class="code-label">prisma/schema.prisma</span>
+<pre><code>  orderItems   OrderItem[]
+  └────┬────┘  └────┬────┘
+   TÊN FIELD    TÊN MODEL
+  bạn tự đặt   phải khớp CHÍNH XÁC</code></pre>
+    </div>
+    <p style="margin-top:10px">
+      Đổi tên bên trái thành gì cũng được — tôi thử một tên vô nghĩa, Prisma vẫn báo
+      <em>"The schema is valid 🚀"</em>. Nhưng đổi <code>model order_items</code> thành
+      <code>model OrderItem</code> mà quên sửa chỗ nhắc tới nó:
+    </p>
+    <div class="code-block" style="margin-top:8px">
+      <span class="code-label">kết quả THẬT</span>
+<pre><code>error: Type "order_items" is neither a built-in type, nor refers to
+another model, composite type, or enum.
+  --&gt; prisma/schema.prisma:29
+29 |   orderItems   order_items[]</code></pre>
+    </div>
+    <p style="margin-top:10px; margin-bottom:0">
+      Nên đổi tên một model là phải đổi <strong>mọi chỗ nhắc tới nó</strong> ở cả 6 model. Sau mỗi lần
+      sửa cứ chạy <code>npx prisma validate</code> — nó chỉ thẳng dòng sai, rẻ hơn nhiều so với phát
+      hiện lúc <code>generate</code>.
+    </p>
+  </div>
+
   <div class="callout warn">
     <div class="ct">⚠️ Đây là đổi tên, KHÔNG phải đổi database</div>
     <p style="margin-bottom:0">

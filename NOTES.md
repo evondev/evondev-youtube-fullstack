@@ -481,3 +481,17 @@ và nối thẳng sang Module 3.5 (SQL thuần).
 
 Bắc cầu Bài 13: đặt sẵn đoạn code N+1 (`findMany` rồi `for` gọi `lesson.findMany`) — 3 khoá = 4 truy vấn,
 500 khoá = 501 truy vấn.
+
+#### 📌 Bài 12 — bổ sung sau khi Tuấn hỏi (2026-08-28)
+
+Tuấn hỏi: đổi tên ở `lessons / orderItems / enrollments` (phần bên phải) có ảnh hưởng gì không?
+Câu hỏi rất đúng chỗ — bài chỉ dặn sửa `currentPrice`/`createdAt` mà không nói ba dòng kia là gì.
+
+Đã kiểm bằng máy, thêm 2 callout vào mục 4:
+- **Field quan hệ KHÔNG phải cột** → không cần `@map`. Chứng minh bằng `migrate diff` giữa hai schema
+  chỉ khác tên field quan hệ → `-- This is an empty migration.`
+- **Đối chứng đáng sợ:** bỏ `@map` khỏi `currentPrice` → `ALTER TABLE DROP COLUMN "current_price"`,
+  tức MẤT DỮ LIỆU. Đây là lý do field thật bắt buộc có `@map`.
+- **Trái vs phải:** tên field bên trái tự do (thử tên vô nghĩa → vẫn `valid 🚀`); tên MODEL bên phải
+  phải khớp chính xác (`Type "order_items" is neither a built-in type...`, P1012).
+- Dặn chạy `npx prisma validate` sau mỗi lần sửa schema.

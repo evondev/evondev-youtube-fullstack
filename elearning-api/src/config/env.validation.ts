@@ -29,6 +29,9 @@ class EnvironmentVariables {
   @IsString()
   @MinLength(16, { message: 'JWT_SECRET must be at least 16 characters' })
   JWT_SECRET!: string;
+
+  @IsString()
+  DATABASE_URL!: string;
 }
 
 export function validateEnv(config: Record<string, unknown>) {
