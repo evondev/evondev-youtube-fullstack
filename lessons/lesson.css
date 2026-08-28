@@ -18,6 +18,22 @@
   --sans: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
 }
 
+/* Bôi đen văn bản. Mặc định của trình duyệt là nền xanh đậm trên chữ sáng —
+   trên nền tối thì gần như không đọc được. Dùng accent làm nền + màu nền tối
+   làm chữ để tương phản cao. Ép cả `color` để ĐÈ màu các span tô cú pháp
+   (.kw .fn .str .num .cmt) trong .code-block, nếu không chúng vẫn giữ màu cũ
+   và chìm nghỉm trên nền accent. */
+::selection {
+  background: var(--accent);
+  color: var(--bg);
+  text-shadow: none;
+}
+::-moz-selection {
+  background: var(--accent);
+  color: var(--bg);
+  text-shadow: none;
+}
+
 * { box-sizing: border-box; }
 
 html { scroll-behavior: smooth; }
@@ -161,6 +177,12 @@ table.data tr:nth-child(even) td { background: rgba(255,255,255,.015); }
 .checklist li::before { content: "✓"; position: absolute; left: 0; color: var(--green); font-weight: 700; }
 
 .try-it { font-size: 14px; color: var(--text-dim); margin-top: 26px; padding-top: 16px; border-top: 1px dashed var(--border); }
+
+/* --- Khối VĂN BẢN để COPY (proposal, bio, cover letter, email) ---
+   Nội dung viết liền một dòng mỗi đoạn, KHÔNG ngắt dòng cứng.
+   pre-wrap để hiển thị xuống dòng tự nhiên nhưng khi copy KHÔNG dính \n giữa câu. */
+.code-block.prose pre { white-space: pre-wrap; word-break: break-word; overflow-x: visible; }
+.code-block.prose pre code { display: block; line-height: 1.75; }
 
 /* ----- print-friendly ----- */
 @media print {

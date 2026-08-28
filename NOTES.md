@@ -300,3 +300,126 @@ chấm xong thì chưa soạn bài mới"). Tuấn tự biết mình đang cần
       (khách VN) — ảnh hưởng lớn tới bài webhook.
 - [ ] Khi tới Module 5 (thanh toán): hỏi Tuấn muốn Stripe (khách quốc tế/remote) hay VNPay/MoMo
       (khách VN) — ảnh hưởng lớn tới bài webhook.
+
+### 🗃️ THÊM MODULE 3.5 — SQL THUẦN (Tuấn yêu cầu 2026-08-28)
+
+Tuấn nói: *"kiến thức SQL thuần tôi chưa có, nghe nói nó cũng quan trọng cho backend dev,
+có gì sau này bro bổ sung tôi 1 module dạy tôi nha"*.
+
+→ Đã chèn **Module 3.5** vào `lessons/index.html`, dùng đúng 4 số còn trống 18–21 (giữa Module 3
+kết ở Bài 17 và Module 4 mở ở Bài 22 — khe này vốn đã bỏ trống, không phải đánh số lại gì cả):
+
+| Bài | Nội dung |
+|-----|----------|
+| 18 | SELECT/WHERE/ORDER BY/LIMIT + JOIN |
+| 19 | GROUP BY + hàm tổng hợp → báo cáo doanh thu |
+| 20 | Subquery, CTE (`WITH`), window function |
+| 21 | Khi nào thoát ORM: `$queryRaw`, tham số hoá, SQL injection |
+
+**Vị trí có chủ ý:** đặt SAU Prisma (Module 3) chứ không trước. Học Prisma xong rồi mới thấy rõ
+chỗ ORM bó tay, lúc đó SQL thuần mới có động lực học. Dạy SQL trước Prisma là dạy lý thuyết suông.
+
+⚠️ Dạy trên **chính 6 bảng của Bài 11** (đã có dữ liệu thật), không dùng bảng ví dụ `employees` vớ vẩn.
+
+### 📌 Bài 11 — sửa sau khi Tuấn phản hồi (2026-08-28)
+
+Callout `NUMERIC` vs `float` chỉ ghi câu `SELECT ...` trần → Tuấn hỏi **"chạy ngay vào đâu nhỉ"**.
+Lỗi của tôi: callout nằm ở §3, mà §4 mới dạy cách kết nối psql.
+→ Đã sửa thành **lệnh bash đầy đủ dán thẳng vào Terminal** (kèm `PGPASSWORD=`), và tách output
+thành khối riêng đúng dạng bảng psql thật.
+
+**Rule rút ra:** mọi callout "chạy thử ngay" phải TỰ ĐỦ — lệnh đầy đủ copy-paste chạy được,
+không phụ thuộc mục phía sau. Người học đọc tới đâu chạy tới đó, không đọc trước.
+
+### 🛠️ THÊM MODULE 9 — DEVOPS & HẠ TẦNG (Tuấn yêu cầu note 2026-08-28)
+
+Tuấn: *"dự án này sau này còn có docker, ci cd, tôi cũng chưa biết gì... nghe nói còn có devops
+như k8s, monitoring, IaC, AWS basis, basic linux gì nữa ấy... chưa cần soạn giờ cũng được note lại thôi"*.
+
+→ Đã chèn **Module 9** vào `lessons/index.html`, Bài 57–63 (nối tiếp Module 8 kết ở Bài 56):
+
+| Bài | Nội dung |
+|-----|----------|
+| 57 | Linux cho backend: shell, quyền, process, port, systemd, đọc log |
+| 58 | Docker hiểu sâu: layer, volume, network, compose nhiều service |
+| 59 | CI/CD nâng cao: cache, matrix, secret, staging → production |
+| 60 | AWS căn bản: IAM, EC2, RDS, S3, VPC/security group + hoá đơn |
+| 61 | IaC với Terraform: plan/apply, state để ở đâu |
+| 62 | Kubernetes: pod/deployment/service/ingress — và khi nào KHÔNG cần |
+| 63 | Monitoring & alert: Prometheus + Grafana, SLO, alert không gây mù |
+
+**CHƯA SOẠN — chỉ ghi nhận.** Tuấn nói rõ "chưa cần soạn giờ".
+
+---
+
+#### ⚠️ MÂU THUẪN THỨ TỰ CẦN GIẢI QUYẾT TRƯỚC KHI TỚI MODULE 7
+
+Tuấn nói **chưa biết gì về Docker**, nhưng lộ trình hiện tại đã dùng Docker từ **Bài 00**
+(Postgres container) và **Bài 46–48** (Dockerfile production, CI/CD, deploy) nằm ở Module 7 —
+tức là **trước** Module 9 nơi Docker mới được dạy tử tế. Không sửa thì Bài 46 sẽ hụt nền.
+
+**Cách xử lý đã chốt (đừng nghĩ lại từ đầu):** KHÔNG đánh số lại. Khi Tuấn tới gần Module 7:
+1. Kéo **Bài 57 (Linux)** và **Bài 58 (Docker sâu)** lên học TRƯỚC Bài 46 — nội dung giữ nguyên,
+   chỉ đổi thứ tự học. Mục lục ghi chú "học sớm nếu cần".
+2. Phần còn lại của Module 9 (AWS, Terraform, k8s, monitoring) vẫn để cuối — đó là hạ tầng
+   *sau khi* app đã chạy được, không phải điều kiện tiên quyết.
+
+Hiện đã có `reference/docker-lenh-thiet-yeu.html` (Module 0) đỡ tạm phần lệnh, nhưng đó là
+cheat-sheet tra cứu, KHÔNG thay được bài dạy layer/volume/network.
+
+---
+
+#### 📍 Trật tự chương cuối (cập nhật)
+
+Module 9 (DevOps) → rồi mới tới **chương ôn phỏng vấn** (rule 2026-08-07: gom vào cuối,
+sau khi dự án e-learning xong). Chương phỏng vấn vẫn CHƯA đưa vào `index.html` — cố ý,
+vì nội dung của nó phụ thuộc vào việc Tuấn thực sự yếu chỗ nào lúc đó.
+
+### 🎨 FIX UI MỤC LỤC + ĐỒNG BỘ STYLE RA GLOBAL (2026-08-28)
+
+**Bug Tuấn phát hiện:** dòng mục lục nào có `<code>` hoặc `<em>` trong tiêu đề thì chữ **vỡ vụn
+thành từng mảnh** (xem Bài 57 `systemd`, Bài 62 `<em>không</em>`).
+
+**Nguyên nhân thật:** `.lessons-list a` để `display:flex`, mà tiêu đề là **text trần** — CSS gói
+mỗi đoạn text trần thành một *anonymous flex item*, nên `<code>` và `<em>` trở thành flex item
+RIÊNG, tự xuống dòng độc lập. Không phải lỗi wrap, là lỗi cấu trúc flex.
+
+**Cách sửa (đã áp dụng):** bọc tiêu đề trong `<span class="ltitle">` → cả tiêu đề là MỘT flex item,
+thẻ inline bên trong chảy chữ bình thường. Kèm `align-items: baseline`, `.badge{align-self:flex-start}`,
+và media query ≤720px cho `.lcount` xuống dòng thay vì bóp tiêu đề. Đã bọc **69 dòng** trong
+`lessons/index.html`, kiểm lại HTML không lỗi lồng thẻ.
+
+🔴 **RULE VĨNH VIỄN:** mọi dòng `.lessons-list` phải có `<span class="ltitle">` bọc tiêu đề,
+KỂ CẢ khi tiêu đề không có thẻ inline nào. Thêm bài mới mà quên là vỡ lại.
+
+**Đã đẩy ra global** (`~/.claude/teach-assets/`) để khoá /teach sau khỏi lặp lại:
+- `lesson.css` — sync bảng màu **Poimandres** từ project, giữ nguyên 2 khối chỉ global mới có
+  (`::selection` và `.code-block.prose`). Giờ `diff` global vs project = **giống hệt**.
+- `INDEX-TEMPLATE.html` — vá `.lessons-list` (ltitle + baseline + media query), đổi màu badge
+  sang Poimandres, và sửa luôn 2 dòng mẫu `<li>` thành có sẵn `.ltitle`.
+- `LESSON-TEMPLATE.html`, `lesson-enhance.js` — đã grep, không còn mã màu bảng cũ, không cần sửa.
+
+### ⌨️ TUẤN CHƯA NẮM DÒNG LỆNH — cần cheat-sheet "đọc hiểu khối copy-paste" (2026-08-28)
+
+Tuấn: *"mấy cú pháp mà bro hướng dẫn tôi copy paste này tôi thấy cũng hay, kể cả CURL tôi cũng
+chưa nắm, note lại sau này dạy cho tôi nha"*.
+
+**Đây là lỗ hổng ĐANG ẢNH HƯỞNG NGAY**, khác với Module 9 (kiến thức tương lai). Từ Bài 02 tới giờ
+bài nào cũng bảo Tuấn dán `curl ...` / `psql ...` mà chưa bài nào giải thích cú pháp — anh đang
+copy-paste mà không đọc được mình đang chạy gì.
+
+**Nội dung cần có** (rút thẳng từ những khối anh đã dán suốt Module 1–3):
+- `curl`: `-s` im lặng, `-i` xem header, `-X POST`, `-H 'Content-Type: ...'`, `-d '{...}'`,
+  `-o /dev/null`, `-w '%{http_code}'`, và **exit code** (7 = không kết nối được, 52 = server chết giữa chừng)
+- `psql`: `-h -p -U -d`, `-c` chạy một câu, `-f` chạy file, meta-command `\dt` `\d+ bảng` `\q`
+- **`VAR=giá_trị lệnh`** — gán biến chỉ cho MỘT lệnh (vì sao `PGPASSWORD=... psql` khác `export`)
+- **Nháy đơn vs nháy kép** — vì sao JSON trong `-d` phải nháy đơn bọc ngoài
+- **Heredoc** `<<'SQL' ... SQL` — vì sao nháy quanh `'SQL'` chặn shell nội suy `$`
+- `|` pipe, `>` `>>` chuyển hướng, `2>&1`, `xargs -P5` (đã dùng ở Bài 09 để bắn 5 request song song)
+- `$?` đọc exit code, `&&` vs `;`
+
+**Vị trí:** cheat-sheet ở **Module 0** (tra cứu bất cứ lúc nào), KHÔNG phải bài đánh số — vì nó
+phục vụ ngược lại các bài đã học rồi. Đã thêm dòng "sắp tới" vào `lessons/index.html` Module 0.
+Sau này Bài 57 (Linux) sẽ đào sâu; cheat-sheet này chỉ để đọc được khối copy-paste.
+
+**CHƯA SOẠN** — Tuấn nói "sau này". Ưu tiên: soạn xen vào khi Tuấn thấy vướng, hoặc ngay sau Module 3.

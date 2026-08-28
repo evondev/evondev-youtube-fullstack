@@ -21,10 +21,17 @@
   .module-why { color: var(--text-dim); font-size: 14px; margin: 0 0 12px; }
   .lessons-list { list-style: none; padding: 0; margin: 0; }
   .lessons-list li { margin: 6px 0; }
+  /* Bố cục 1 dòng mục lục: badge — tiêu đề — kết quả.
+     BẮT BUỘC bọc tiêu đề trong .ltitle. Nếu để text trần trong flex container,
+     mỗi <code>/<em> trong tiêu đề bị tính là MỘT flex item riêng và tự xuống dòng
+     độc lập — chữ vỡ vụn thành từng mảnh. Bọc lại thì cả tiêu đề là một item, các
+     thẻ inline bên trong chảy chữ bình thường. */
   .lessons-list a, .lessons-list span.soon {
-    display: flex; align-items: center; gap: 10px; padding: 10px 14px; border-radius: 10px;
+    display: flex; align-items: baseline; gap: 10px; padding: 10px 14px; border-radius: 10px;
     border: 1px solid var(--border); background: var(--bg-soft); font-size: 15px;
+    line-height: 1.55;
   }
+  .ltitle { flex: 1 1 auto; min-width: 0; }
   .lessons-list a { color: var(--text); }
   .lessons-list a:hover { border-color: var(--accent); background: var(--bg-card); }
   .lessons-list span.soon { color: var(--text-dim); border-style: dashed; }
@@ -32,7 +39,15 @@
   .badge.done { background: rgba(95,179,161,.16); color: var(--green); }
   .badge.now  { background: rgba(93,228,199,.15); color: var(--accent); }
   .badge.soon { background: #252b37; color: var(--text-dim); }
-  .lcount { margin-left: auto; font-size: 12px; color: var(--text-dim); font-family: var(--mono); flex-shrink: 0; padding-left: 14px; text-align: right; }
+  .lcount { flex: 0 0 auto; font-size: 12px; color: var(--text-dim); font-family: var(--mono); padding-left: 14px; text-align: right; }
+  .badge { align-self: flex-start; }
+
+  /* Màn hình hẹp: xếp dọc, cột kết quả xuống dưới thay vì bóp tiêu đề. */
+  @media (max-width: 720px) {
+    .lessons-list a, .lessons-list span.soon { flex-wrap: wrap; }
+    .ltitle { flex: 1 1 100%; order: 2; }
+    .lcount { order: 3; flex: 1 1 100%; padding-left: 0; text-align: left; margin-top: 2px; }
+  }
   .intro-card { background: var(--bg-card); border: 1px solid var(--border); border-left: 4px solid var(--accent-2); border-radius: var(--radius); padding: 18px 20px; margin-bottom: 10px; }
 </style>
 </head>
@@ -70,8 +85,9 @@
     <h2>Dựng khung dự án</h2>
     <p class="module-why">Không học chay. Trước bài kiến thức đầu tiên, máy bạn phải có <code>elearning-api</code> chạy được cùng database và cache — để mọi bài sau cắm thẳng code vào.</p>
     <ul class="lessons-list">
-      <li><a href="0000-dung-san-tap.html"><span class="badge done">Bài 00</span> Dựng sân tập: NestJS + Postgres + Redis chạy trên máy bạn <span class="lcount">→ khung dự án + DB + cache</span></a></li>
-      <li><a href="../reference/docker-lenh-thiet-yeu.html"><span class="badge done">📄 Ôn</span> Cheat-sheet: lệnh Docker &amp; Compose thiết yếu <span class="lcount">tra nhanh · in được</span></a></li>
+      <li><a href="0000-dung-san-tap.html"><span class="badge done">Bài 00</span> <span class="ltitle">Dựng sân tập: NestJS + Postgres + Redis chạy trên máy bạn</span> <span class="lcount">→ khung dự án + DB + cache</span></a></li>
+      <li><a href="../reference/docker-lenh-thiet-yeu.html"><span class="badge done">📄 Ôn</span> <span class="ltitle">Cheat-sheet: lệnh Docker &amp; Compose thiết yếu</span> <span class="lcount">tra nhanh · in được</span></a></li>
+      <li><span class="soon"><span class="badge soon">📄 Ôn</span> <span class="ltitle">Cheat-sheet: đọc hiểu dòng lệnh — <code>curl</code>, <code>psql</code>, biến môi trường, nháy kép/đơn, heredoc, pipe</span> <span class="lcount">giải mã mọi khối copy-paste</span></span></li>
     </ul>
   </div>
 
@@ -81,13 +97,13 @@
     <h2>Bản chất backend &amp; Node runtime</h2>
     <p class="module-why">Framework chỉ là lớp bọc. Nếu không hiểu HTTP và event loop, bạn sẽ mãi copy-paste NestJS mà không biết vì sao hệ thống chậm hay chết. Module này bạn viết server <em>không dùng framework</em>, trong <code>lab/</code>.</p>
     <ul class="lessons-list">
-      <li><a href="0001-http-that-su-la-gi.html"><span class="badge done">Bài 01</span> HTTP thực sự là gì — tự viết web server bằng <code>node:http</code> thuần <span class="lcount">nền · lab/</span></a></li>
-      <li><a href="0002-request-response.html"><span class="badge now">Bài 02</span> Request &amp; Response: method, status code, header, body <span class="lcount">nền · lab/</span></a></li>
-      <li><a href="0003-event-loop.html"><span class="badge now">Bài 03</span> Event loop &amp; non-blocking I/O — vì sao Node hợp việc I/O <span class="lcount">nền · lab/</span></a></li>
-      <li><a href="0004-async-va-loi.html"><span class="badge now">Bài 04</span> Async trong Node: callback → Promise → async/await, và lỗi đi đâu <span class="lcount">nền · lab/</span></a></li>
-      <li><span class="soon"><span class="badge soon">hoãn</span> Tiến trình server: env, tín hiệu tắt, graceful shutdown <span class="lcount">kéo vào khi API cần deploy</span></span></li>
-      <li><span class="soon"><span class="badge soon">hoãn</span> Thiết kế REST API: resource, verb, status, versioning, idempotency <span class="lcount">kéo vào khi API đủ lớn</span></span></li>
-      <li><a href="../reference/node-va-nestjs-tra-nhanh.html"><span class="badge done">📄 Ôn</span> Cheat-sheet: Node core &amp; NestJS cải thiện gì <span class="lcount">gom Bài 01→06 · in được</span></a></li>
+      <li><a href="0001-http-that-su-la-gi.html"><span class="badge done">Bài 01</span> <span class="ltitle">HTTP thực sự là gì — tự viết web server bằng <code>node:http</code> thuần</span> <span class="lcount">nền · lab/</span></a></li>
+      <li><a href="0002-request-response.html"><span class="badge now">Bài 02</span> <span class="ltitle">Request &amp; Response: method, status code, header, body</span> <span class="lcount">nền · lab/</span></a></li>
+      <li><a href="0003-event-loop.html"><span class="badge now">Bài 03</span> <span class="ltitle">Event loop &amp; non-blocking I/O — vì sao Node hợp việc I/O</span> <span class="lcount">nền · lab/</span></a></li>
+      <li><a href="0004-async-va-loi.html"><span class="badge now">Bài 04</span> <span class="ltitle">Async trong Node: callback → Promise → async/await, và lỗi đi đâu</span> <span class="lcount">nền · lab/</span></a></li>
+      <li><span class="soon"><span class="badge soon">hoãn</span> <span class="ltitle">Tiến trình server: env, tín hiệu tắt, graceful shutdown</span> <span class="lcount">kéo vào khi API cần deploy</span></span></li>
+      <li><span class="soon"><span class="badge soon">hoãn</span> <span class="ltitle">Thiết kế REST API: resource, verb, status, versioning, idempotency</span> <span class="lcount">kéo vào khi API đủ lớn</span></span></li>
+      <li><a href="../reference/node-va-nestjs-tra-nhanh.html"><span class="badge done">📄 Ôn</span> <span class="ltitle">Cheat-sheet: Node core &amp; NestJS cải thiện gì</span> <span class="lcount">gom Bài 01→06 · in được</span></a></li>
     </ul>
   </div>
 
@@ -97,13 +113,13 @@
     <h2>NestJS — kiến trúc và <em>vì sao</em> có nó</h2>
     <p class="module-why">Sau khi tự tay chịu khổ ở Module 1, bạn sẽ thấy rõ Nest giải quyết vấn đề gì. Module này dựng bộ khung mà các bài sau đắp code vào — và ra endpoint thật đầu tiên.<br><em style="opacity:.75">Lộ trình đã rút gọn để ra sản phẩm sớm: Bài 05 gộp luôn phần Module/DI/Controller/Service. Số bài các module sau sẽ dồn lên tương ứng.</em></p>
     <ul class="lessons-list">
-      <li><a href="0005-nestjs-endpoint-dau-tien.html"><span class="badge now">Bài 05</span> NestJS: Module – Controller – Service, và endpoint thật đầu tiên <span class="lcount">→ GET /courses trong src/</span></a></li>
-      <li><a href="0006-dto-validation.html"><span class="badge now">Bài 06</span> DTO + ValidationPipe: chặn dữ liệu bẩn ngay ở biên hệ thống <span class="lcount">→ POST /courses có validate</span></a></li>
-      <li><a href="0007-exception-filter.html"><span class="badge now">Bài 07</span> Exception filter: vì sao lỗi API phải có "hình dạng" cố định <span class="lcount">→ lỗi API chuẩn hoá</span></a></li>
-      <li><a href="0008-config-12-factor.html"><span class="badge now">Bài 08</span> Config &amp; 12-factor: env, validate cấu hình ngay lúc khởi động <span class="lcount">→ .env + kiểm config</span></a></li>
-      <li><a href="0009-logging-request-id.html"><span class="badge now">Bài 09</span> Logging có cấu trúc + request-id: nhìn thấy hệ thống đang làm gì <span class="lcount">→ log có request-id</span></a></li>
-      <li><a href="0010-pino-log-json.html"><span class="badge now">Bài 10</span> Pino: log JSON cho máy đọc, và tự động che secret <span class="lcount">→ log JSON + redact</span></a></li>
-      <li><a href="../reference/nestjs-thuc-chien-tra-nhanh.html"><span class="badge done">📄 Ôn</span> Cheat-sheet: NestJS thực chiến <span class="lcount">gom Bài 05→10 · in được</span></a></li>
+      <li><a href="0005-nestjs-endpoint-dau-tien.html"><span class="badge now">Bài 05</span> <span class="ltitle">NestJS: Module – Controller – Service, và endpoint thật đầu tiên</span> <span class="lcount">→ GET /courses trong src/</span></a></li>
+      <li><a href="0006-dto-validation.html"><span class="badge now">Bài 06</span> <span class="ltitle">DTO + ValidationPipe: chặn dữ liệu bẩn ngay ở biên hệ thống</span> <span class="lcount">→ POST /courses có validate</span></a></li>
+      <li><a href="0007-exception-filter.html"><span class="badge now">Bài 07</span> <span class="ltitle">Exception filter: vì sao lỗi API phải có "hình dạng" cố định</span> <span class="lcount">→ lỗi API chuẩn hoá</span></a></li>
+      <li><a href="0008-config-12-factor.html"><span class="badge now">Bài 08</span> <span class="ltitle">Config &amp; 12-factor: env, validate cấu hình ngay lúc khởi động</span> <span class="lcount">→ .env + kiểm config</span></a></li>
+      <li><a href="0009-logging-request-id.html"><span class="badge now">Bài 09</span> <span class="ltitle">Logging có cấu trúc + request-id: nhìn thấy hệ thống đang làm gì</span> <span class="lcount">→ log có request-id</span></a></li>
+      <li><a href="0010-pino-log-json.html"><span class="badge now">Bài 10</span> <span class="ltitle">Pino: log JSON cho máy đọc, và tự động che secret</span> <span class="lcount">→ log JSON + redact</span></a></li>
+      <li><a href="../reference/nestjs-thuc-chien-tra-nhanh.html"><span class="badge done">📄 Ôn</span> <span class="ltitle">Cheat-sheet: NestJS thực chiến</span> <span class="lcount">gom Bài 05→10 · in được</span></a></li>
     </ul>
   </div>
 
@@ -113,13 +129,26 @@
     <h2>Dữ liệu: PostgreSQL + Prisma</h2>
     <p class="module-why">Đây là chỗ junior và senior khác nhau rõ nhất. Ai cũng viết được CRUD; ít người biết vì sao trang 10.000 chậm, vì sao mất tiền khi hai request chạy cùng lúc.</p>
     <ul class="lessons-list">
-      <li><a href="0011-thiet-ke-schema.html"><span class="badge now">Bài 11</span> Thiết kế schema e-learning: cái gì được đổi, cái gì phải bất biến <span class="lcount">→ 6 bảng thật trong Postgres</span></a></li>
-      <li><span class="soon"><span class="badge soon">Bài 12</span> Prisma 7: schema, migrate, và nối API vào database thật <span class="lcount">→ /courses đọc từ Postgres</span></span></li>
-      <li><span class="soon"><span class="badge soon">Bài 13</span> Truy vấn &amp; quan hệ — và cái bẫy N+1 <span class="lcount">→ /courses kèm bài học</span></span></li>
-      <li><span class="soon"><span class="badge soon">Bài 14</span> Index: vì sao truy vấn chậm, và cái giá phải trả khi thêm index <span class="lcount">→ đo EXPLAIN thật</span></span></li>
-      <li><span class="soon"><span class="badge soon">Bài 15</span> Phân trang: offset vs cursor — vì sao offset chết ở trang 10.000 <span class="lcount">→ phân trang cursor</span></span></li>
-      <li><span class="soon"><span class="badge soon">Bài 16</span> Transaction &amp; isolation level — ACID qua ca "mua khoá học" <span class="lcount">→ mua hàng an toàn</span></span></li>
-      <li><span class="soon"><span class="badge soon">Bài 17</span> Migration an toàn trên production, seed, soft delete, audit log <span class="lcount">→ seed data + audit</span></span></li>
+      <li><a href="0011-thiet-ke-schema.html"><span class="badge now">Bài 11</span> <span class="ltitle">Thiết kế schema e-learning: cái gì được đổi, cái gì phải bất biến</span> <span class="lcount">→ 6 bảng thật trong Postgres</span></a></li>
+      <li><span class="soon"><span class="badge soon">Bài 12</span> <span class="ltitle">Prisma 7: schema, migrate, và nối API vào database thật</span> <span class="lcount">→ /courses đọc từ Postgres</span></span></li>
+      <li><span class="soon"><span class="badge soon">Bài 13</span> <span class="ltitle">Truy vấn &amp; quan hệ — và cái bẫy N+1</span> <span class="lcount">→ /courses kèm bài học</span></span></li>
+      <li><span class="soon"><span class="badge soon">Bài 14</span> <span class="ltitle">Index: vì sao truy vấn chậm, và cái giá phải trả khi thêm index</span> <span class="lcount">→ đo EXPLAIN thật</span></span></li>
+      <li><span class="soon"><span class="badge soon">Bài 15</span> <span class="ltitle">Phân trang: offset vs cursor — vì sao offset chết ở trang 10.000</span> <span class="lcount">→ phân trang cursor</span></span></li>
+      <li><span class="soon"><span class="badge soon">Bài 16</span> <span class="ltitle">Transaction &amp; isolation level — ACID qua ca "mua khoá học"</span> <span class="lcount">→ mua hàng an toàn</span></span></li>
+      <li><span class="soon"><span class="badge soon">Bài 17</span> <span class="ltitle">Migration an toàn trên production, seed, soft delete, audit log</span> <span class="lcount">→ seed data + audit</span></span></li>
+    </ul>
+  </div>
+
+  <!-- ===== MODULE 3.5 ===== -->
+  <div class="module">
+    <div class="module-head"><span class="module-num">Module 3.5</span></div>
+    <h2>SQL thuần — thứ còn lại khi ORM hết đường</h2>
+    <p class="module-why">Prisma viết hộ 90% câu truy vấn. 10% còn lại — báo cáo doanh thu, thống kê, truy vấn chậm cần đọc để sửa — là chỗ Prisma bó tay và người biết SQL thuần đi tiếp một mình. Phỏng vấn backend cũng hỏi thẳng SQL, không hỏi ORM.</p>
+    <ul class="lessons-list">
+      <li><span class="soon"><span class="badge soon">Bài 18</span> <span class="ltitle">SELECT · WHERE · ORDER BY · LIMIT và JOIN: đọc dữ liệu từ nhiều bảng</span> <span class="lcount">→ truy vấn trên 6 bảng đã có</span></span></li>
+      <li><span class="soon"><span class="badge soon">Bài 19</span> <span class="ltitle">GROUP BY &amp; hàm tổng hợp: báo cáo doanh thu theo khoá, theo tháng</span> <span class="lcount">→ báo cáo doanh thu thật</span></span></li>
+      <li><span class="soon"><span class="badge soon">Bài 20</span> <span class="ltitle">Subquery, CTE (<code>WITH</code>) và window function — xếp hạng, luỹ kế</span> <span class="lcount">→ top khoá bán chạy</span></span></li>
+      <li><span class="soon"><span class="badge soon">Bài 21</span> <span class="ltitle">Khi nào thoát khỏi ORM: <code>$queryRaw</code>, tham số hoá, và SQL injection</span> <span class="lcount">→ 1 truy vấn raw an toàn</span></span></li>
     </ul>
   </div>
 
@@ -129,14 +158,14 @@
     <h2>Auth &amp; bảo mật</h2>
     <p class="module-why">Đúng các tính năng bạn đặt hàng: đăng ký, đăng nhập, đăng xuất, quên mật khẩu, đổi mật khẩu — nhưng làm cho <em>đúng</em>, không phải làm cho <em>chạy</em>. Đây cũng là phần khách freelance soi kỹ nhất.</p>
     <ul class="lessons-list">
-      <li><span class="soon"><span class="badge soon">Bài 22</span> Lưu mật khẩu: vì sao bcrypt/argon2, vì sao <em>không</em> phải SHA-256 <span class="lcount">→ bảng User + hash</span></span></li>
-      <li><span class="soon"><span class="badge soon">Bài 23</span> Đăng ký + xác thực email (token dùng một lần, có hạn) <span class="lcount">→ POST /auth/register</span></span></li>
-      <li><span class="soon"><span class="badge soon">Bài 24</span> JWT bản chất: <code>header.payload.signature</code> — tự ký &amp; verify bằng tay <span class="lcount">nền · lab/</span></span></li>
-      <li><span class="soon"><span class="badge soon">Bài 25</span> Access token + Refresh token rotation — lưu ở đâu và vì sao <span class="lcount">→ login / refresh / logout</span></span></li>
-      <li><span class="soon"><span class="badge soon">Bài 26</span> Guard &amp; Passport strategy: gắn auth vào route trong Nest <span class="lcount">→ route được bảo vệ</span></span></li>
-      <li><span class="soon"><span class="badge soon">Bài 27</span> RBAC: student / instructor / admin — phân quyền không rối <span class="lcount">→ phân quyền 3 vai trò</span></span></li>
-      <li><span class="soon"><span class="badge soon">Bài 28</span> Quên mật khẩu &amp; đổi mật khẩu an toàn (thu hồi session cũ) <span class="lcount">→ forgot/change password</span></span></li>
-      <li><span class="soon"><span class="badge soon">Bài 29</span> OWASP cho API: rate limit, CORS, helmet, mass assignment, injection <span class="lcount">→ API được bọc giáp</span></span></li>
+      <li><span class="soon"><span class="badge soon">Bài 22</span> <span class="ltitle">Lưu mật khẩu: vì sao bcrypt/argon2, vì sao <em>không</em> phải SHA-256</span> <span class="lcount">→ bảng User + hash</span></span></li>
+      <li><span class="soon"><span class="badge soon">Bài 23</span> <span class="ltitle">Đăng ký + xác thực email (token dùng một lần, có hạn)</span> <span class="lcount">→ POST /auth/register</span></span></li>
+      <li><span class="soon"><span class="badge soon">Bài 24</span> <span class="ltitle">JWT bản chất: <code>header.payload.signature</code> — tự ký &amp; verify bằng tay</span> <span class="lcount">nền · lab/</span></span></li>
+      <li><span class="soon"><span class="badge soon">Bài 25</span> <span class="ltitle">Access token + Refresh token rotation — lưu ở đâu và vì sao</span> <span class="lcount">→ login / refresh / logout</span></span></li>
+      <li><span class="soon"><span class="badge soon">Bài 26</span> <span class="ltitle">Guard &amp; Passport strategy: gắn auth vào route trong Nest</span> <span class="lcount">→ route được bảo vệ</span></span></li>
+      <li><span class="soon"><span class="badge soon">Bài 27</span> <span class="ltitle">RBAC: student / instructor / admin — phân quyền không rối</span> <span class="lcount">→ phân quyền 3 vai trò</span></span></li>
+      <li><span class="soon"><span class="badge soon">Bài 28</span> <span class="ltitle">Quên mật khẩu &amp; đổi mật khẩu an toàn (thu hồi session cũ)</span> <span class="lcount">→ forgot/change password</span></span></li>
+      <li><span class="soon"><span class="badge soon">Bài 29</span> <span class="ltitle">OWASP cho API: rate limit, CORS, helmet, mass assignment, injection</span> <span class="lcount">→ API được bọc giáp</span></span></li>
     </ul>
   </div>
 
@@ -146,12 +175,12 @@
     <h2>Nghiệp vụ e-learning &amp; thanh toán</h2>
     <p class="module-why">Giỏ hàng, mua khoá học, thanh toán. Đây là phần "đụng tới tiền" — nơi bug không chỉ khó chịu mà còn <em>tốn tiền thật</em>, nên là phần chứng minh năng lực mạnh nhất trong portfolio.</p>
     <ul class="lessons-list">
-      <li><span class="soon"><span class="badge soon">Bài 30</span> Giỏ hàng &amp; Order: state machine (pending → paid → refunded) <span class="lcount">→ API giỏ hàng + đơn</span></span></li>
-      <li><span class="soon"><span class="badge soon">Bài 31</span> Tích hợp cổng thanh toán: checkout flow đúng chuẩn <span class="lcount">→ tạo link thanh toán</span></span></li>
-      <li><span class="soon"><span class="badge soon">Bài 32</span> Webhook: verify chữ ký, idempotency, retry — vì sao nó chạy 2 lần <span class="lcount">→ webhook chống trùng</span></span></li>
-      <li><span class="soon"><span class="badge soon">Bài 33</span> Enrollment &amp; theo dõi tiến độ học sau khi thanh toán <span class="lcount">→ ghi danh + tiến độ</span></span></li>
-      <li><span class="soon"><span class="badge soon">Bài 34</span> Upload video/tài liệu: presigned URL — đừng đẩy file qua API server <span class="lcount">→ upload video</span></span></li>
-      <li><span class="soon"><span class="badge soon">Bài 35</span> Tìm kiếm &amp; lọc khoá học: full-text search bằng chính Postgres <span class="lcount">→ tìm kiếm khoá học</span></span></li>
+      <li><span class="soon"><span class="badge soon">Bài 30</span> <span class="ltitle">Giỏ hàng &amp; Order: state machine (pending → paid → refunded)</span> <span class="lcount">→ API giỏ hàng + đơn</span></span></li>
+      <li><span class="soon"><span class="badge soon">Bài 31</span> <span class="ltitle">Tích hợp cổng thanh toán: checkout flow đúng chuẩn</span> <span class="lcount">→ tạo link thanh toán</span></span></li>
+      <li><span class="soon"><span class="badge soon">Bài 32</span> <span class="ltitle">Webhook: verify chữ ký, idempotency, retry — vì sao nó chạy 2 lần</span> <span class="lcount">→ webhook chống trùng</span></span></li>
+      <li><span class="soon"><span class="badge soon">Bài 33</span> <span class="ltitle">Enrollment &amp; theo dõi tiến độ học sau khi thanh toán</span> <span class="lcount">→ ghi danh + tiến độ</span></span></li>
+      <li><span class="soon"><span class="badge soon">Bài 34</span> <span class="ltitle">Upload video/tài liệu: presigned URL — đừng đẩy file qua API server</span> <span class="lcount">→ upload video</span></span></li>
+      <li><span class="soon"><span class="badge soon">Bài 35</span> <span class="ltitle">Tìm kiếm &amp; lọc khoá học: full-text search bằng chính Postgres</span> <span class="lcount">→ tìm kiếm khoá học</span></span></li>
     </ul>
   </div>
 
@@ -161,13 +190,13 @@
     <h2>Scale &amp; vận hành</h2>
     <p class="module-why">Phần tách junior khỏi senior. Không phải "biết dùng Redis" mà là "biết khi nào <em>chưa</em> cần Redis, và khi cần thì hỏng ở đâu".</p>
     <ul class="lessons-list">
-      <li><span class="soon"><span class="badge soon">Bài 36</span> Redis &amp; caching: cache-aside, TTL, invalidation, cache stampede <span class="lcount">→ cache danh sách khoá</span></span></li>
-      <li><span class="soon"><span class="badge soon">Bài 37</span> Background job với BullMQ: gửi mail, xử lý video, retry, DLQ <span class="lcount">→ queue gửi mail</span></span></li>
-      <li><span class="soon"><span class="badge soon">Bài 38</span> Cron &amp; scheduled task: nhắc học, hết hạn khoá học <span class="lcount">→ cron nhắc học</span></span></li>
-      <li><span class="soon"><span class="badge soon">Bài 39</span> Realtime: WebSocket vs SSE cho thông báo &amp; lớp live <span class="lcount">→ thông báo realtime</span></span></li>
-      <li><span class="soon"><span class="badge soon">Bài 40</span> Rate limiting &amp; idempotency key ở tầng API <span class="lcount">→ chống spam &amp; trùng đơn</span></span></li>
-      <li><span class="soon"><span class="badge soon">Bài 41</span> Observability: health check, metrics, trace, log tương quan <span class="lcount">→ /health + metrics</span></span></li>
-      <li><span class="soon"><span class="badge soon">Bài 42</span> Performance: đo TRƯỚC đã — connection pool, load test bằng k6 <span class="lcount">→ báo cáo load test</span></span></li>
+      <li><span class="soon"><span class="badge soon">Bài 36</span> <span class="ltitle">Redis &amp; caching: cache-aside, TTL, invalidation, cache stampede</span> <span class="lcount">→ cache danh sách khoá</span></span></li>
+      <li><span class="soon"><span class="badge soon">Bài 37</span> <span class="ltitle">Background job với BullMQ: gửi mail, xử lý video, retry, DLQ</span> <span class="lcount">→ queue gửi mail</span></span></li>
+      <li><span class="soon"><span class="badge soon">Bài 38</span> <span class="ltitle">Cron &amp; scheduled task: nhắc học, hết hạn khoá học</span> <span class="lcount">→ cron nhắc học</span></span></li>
+      <li><span class="soon"><span class="badge soon">Bài 39</span> <span class="ltitle">Realtime: WebSocket vs SSE cho thông báo &amp; lớp live</span> <span class="lcount">→ thông báo realtime</span></span></li>
+      <li><span class="soon"><span class="badge soon">Bài 40</span> <span class="ltitle">Rate limiting &amp; idempotency key ở tầng API</span> <span class="lcount">→ chống spam &amp; trùng đơn</span></span></li>
+      <li><span class="soon"><span class="badge soon">Bài 41</span> <span class="ltitle">Observability: health check, metrics, trace, log tương quan</span> <span class="lcount">→ /health + metrics</span></span></li>
+      <li><span class="soon"><span class="badge soon">Bài 42</span> <span class="ltitle">Performance: đo TRƯỚC đã — connection pool, load test bằng k6</span> <span class="lcount">→ báo cáo load test</span></span></li>
     </ul>
   </div>
 
@@ -177,12 +206,12 @@
     <h2>Chất lượng &amp; giao hàng</h2>
     <p class="module-why">Freelance nghĩa là <em>bạn</em> chịu trách nhiệm khi hệ thống chết lúc 2h sáng. Module này biến project thành thứ dám đưa cho khách — kết thúc bằng việc nó chạy thật trên internet.</p>
     <ul class="lessons-list">
-      <li><span class="soon"><span class="badge soon">Bài 43</span> Unit test service: mock DI, và test <em>cái đáng test</em> <span class="lcount">→ test OrdersService</span></span></li>
-      <li><span class="soon"><span class="badge soon">Bài 44</span> Integration test với database thật (Testcontainers) <span class="lcount">→ test chạy trên DB thật</span></span></li>
-      <li><span class="soon"><span class="badge soon">Bài 45</span> E2E test API + chiến lược dữ liệu test <span class="lcount">→ test luồng mua hàng</span></span></li>
-      <li><span class="soon"><span class="badge soon">Bài 46</span> Docker hoá app: multi-stage Dockerfile gọn &amp; an toàn <span class="lcount">→ Dockerfile production</span></span></li>
-      <li><span class="soon"><span class="badge soon">Bài 47</span> CI/CD với GitHub Actions: cổng chất lượng tự động <span class="lcount">→ pipeline CI xanh</span></span></li>
-      <li><span class="soon"><span class="badge soon">Bài 48</span> Deploy production thật + chạy migration + rollback <span class="lcount">🚀 API LÊN INTERNET</span></span></li>
+      <li><span class="soon"><span class="badge soon">Bài 43</span> <span class="ltitle">Unit test service: mock DI, và test <em>cái đáng test</em></span> <span class="lcount">→ test OrdersService</span></span></li>
+      <li><span class="soon"><span class="badge soon">Bài 44</span> <span class="ltitle">Integration test với database thật (Testcontainers)</span> <span class="lcount">→ test chạy trên DB thật</span></span></li>
+      <li><span class="soon"><span class="badge soon">Bài 45</span> <span class="ltitle">E2E test API + chiến lược dữ liệu test</span> <span class="lcount">→ test luồng mua hàng</span></span></li>
+      <li><span class="soon"><span class="badge soon">Bài 46</span> <span class="ltitle">Docker hoá app: multi-stage Dockerfile gọn &amp; an toàn</span> <span class="lcount">→ Dockerfile production</span></span></li>
+      <li><span class="soon"><span class="badge soon">Bài 47</span> <span class="ltitle">CI/CD với GitHub Actions: cổng chất lượng tự động</span> <span class="lcount">→ pipeline CI xanh</span></span></li>
+      <li><span class="soon"><span class="badge soon">Bài 48</span> <span class="ltitle">Deploy production thật + chạy migration + rollback</span> <span class="lcount">🚀 API LÊN INTERNET</span></span></li>
     </ul>
   </div>
 
@@ -192,14 +221,30 @@
     <h2>Tư duy senior &amp; nghề nghiệp</h2>
     <p class="module-why">Senior không phải "biết nhiều công nghệ hơn" mà là "chọn đúng và biết từ chối". Module cuối bám thẳng mục tiêu freelance + startup riêng của bạn.</p>
     <ul class="lessons-list">
-      <li><span class="soon"><span class="badge soon">Bài 49</span> Kiến trúc: layered vs hexagonal — khi nào đáng, khi nào over-engineer <span class="lcount">→ refactor ranh giới module</span></span></li>
-      <li><span class="soon"><span class="badge soon">Bài 50</span> Domain modeling: đặt tên &amp; vẽ ranh giới module cho e-learning <span class="lcount">→ sơ đồ domain</span></span></li>
-      <li><span class="soon"><span class="badge soon">Bài 51</span> Khi nào tách microservice — và vì sao thường <em>không</em> nên <span class="lcount">→ ADR "vì sao monolith"</span></span></li>
-      <li><span class="soon"><span class="badge soon">Bài 52</span> System design: "e-learning 100.000 user" — bài mock thiết kế <span class="lcount">→ tài liệu system design</span></span></li>
-      <li><span class="soon"><span class="badge soon">Bài 53</span> Code review kiểu senior 5 trục — review chính project của bạn <span class="lcount">→ báo cáo review + sửa</span></span></li>
-      <li><span class="soon"><span class="badge soon">Bài 54</span> Vận hành thật một mình: chi phí, backup, incident, on-call <span class="lcount">→ runbook + backup</span></span></li>
-      <li><span class="soon"><span class="badge soon">Bài 55</span> Survey: GraphQL, gRPC, serverless, Bun/Deno — cái nào đáng học tiếp <span class="lcount">nền · khảo sát</span></span></li>
-      <li><span class="soon"><span class="badge soon">Bài 56</span> Đóng gói portfolio, định giá &amp; viết proposal freelance <span class="lcount">🎯 README + bảng giá</span></span></li>
+      <li><span class="soon"><span class="badge soon">Bài 49</span> <span class="ltitle">Kiến trúc: layered vs hexagonal — khi nào đáng, khi nào over-engineer</span> <span class="lcount">→ refactor ranh giới module</span></span></li>
+      <li><span class="soon"><span class="badge soon">Bài 50</span> <span class="ltitle">Domain modeling: đặt tên &amp; vẽ ranh giới module cho e-learning</span> <span class="lcount">→ sơ đồ domain</span></span></li>
+      <li><span class="soon"><span class="badge soon">Bài 51</span> <span class="ltitle">Khi nào tách microservice — và vì sao thường <em>không</em> nên</span> <span class="lcount">→ ADR "vì sao monolith"</span></span></li>
+      <li><span class="soon"><span class="badge soon">Bài 52</span> <span class="ltitle">System design: "e-learning 100.000 user" — bài mock thiết kế</span> <span class="lcount">→ tài liệu system design</span></span></li>
+      <li><span class="soon"><span class="badge soon">Bài 53</span> <span class="ltitle">Code review kiểu senior 5 trục — review chính project của bạn</span> <span class="lcount">→ báo cáo review + sửa</span></span></li>
+      <li><span class="soon"><span class="badge soon">Bài 54</span> <span class="ltitle">Vận hành thật một mình: chi phí, backup, incident, on-call</span> <span class="lcount">→ runbook + backup</span></span></li>
+      <li><span class="soon"><span class="badge soon">Bài 55</span> <span class="ltitle">Survey: GraphQL, gRPC, serverless, Bun/Deno — cái nào đáng học tiếp</span> <span class="lcount">nền · khảo sát</span></span></li>
+      <li><span class="soon"><span class="badge soon">Bài 56</span> <span class="ltitle">Đóng gói portfolio, định giá &amp; viết proposal freelance</span> <span class="lcount">🎯 README + bảng giá</span></span></li>
+    </ul>
+  </div>
+
+  <!-- ===== MODULE 9 ===== -->
+  <div class="module">
+    <div class="module-head"><span class="module-num">Module 9</span></div>
+    <h2>DevOps &amp; hạ tầng — tự nuôi hệ thống của mình</h2>
+    <p class="module-why">Freelance một mình nghĩa là không có ai khác dựng server cho bạn. Module này đi từ Linux tới hạ tầng thật. Có bài <em>cố ý</em> dạy lý do KHÔNG dùng (k8s, Terraform) — biết từ chối cũng là một kỹ năng tính tiền được.</p>
+    <ul class="lessons-list">
+      <li><span class="soon"><span class="badge soon">Bài 57</span> <span class="ltitle">Linux cho backend: shell, quyền, process, port, <code>systemd</code>, đọc log server</span> <span class="lcount">→ tự cứu server qua SSH</span></span></li>
+      <li><span class="soon"><span class="badge soon">Bài 58</span> <span class="ltitle">Docker hiểu sâu: image layer, volume, network, compose nhiều service</span> <span class="lcount">→ stack chạy 1 lệnh</span></span></li>
+      <li><span class="soon"><span class="badge soon">Bài 59</span> <span class="ltitle">CI/CD nâng cao: cache, matrix, secret, môi trường staging → production</span> <span class="lcount">→ pipeline 2 môi trường</span></span></li>
+      <li><span class="soon"><span class="badge soon">Bài 60</span> <span class="ltitle">AWS căn bản: IAM, EC2, RDS, S3, VPC &amp; security group — và hoá đơn</span> <span class="lcount">→ hạ tầng thật trên AWS</span></span></li>
+      <li><span class="soon"><span class="badge soon">Bài 61</span> <span class="ltitle">IaC với Terraform: hạ tầng là code, <code>plan</code>/<code>apply</code>, state để ở đâu</span> <span class="lcount">→ dựng lại hạ tầng bằng 1 lệnh</span></span></li>
+      <li><span class="soon"><span class="badge soon">Bài 62</span> <span class="ltitle">Kubernetes: pod, deployment, service, ingress — và khi nào <em>không</em> cần k8s</span> <span class="lcount">→ deploy app lên cụm k8s</span></span></li>
+      <li><span class="soon"><span class="badge soon">Bài 63</span> <span class="ltitle">Monitoring &amp; cảnh báo: Prometheus + Grafana, SLO, alert không gây mù</span> <span class="lcount">→ dashboard + alert thật</span></span></li>
     </ul>
   </div>
 

@@ -186,13 +186,22 @@
 
   <div class="callout danger">
     <div class="ct">🚨 <code>NUMERIC</code> cho tiền — đừng bao giờ dùng <code>float</code></div>
-    <p>Chạy thử ngay trong Postgres của bạn:</p>
+    <p>
+      Chạy thử ngay — <strong>dán cả khối này vào Terminal</strong> (không phải vào file .sql).
+      Postgres từ Bài 00 phải đang chạy; chưa có bảng nào cũng chạy được vì câu này không đọc bảng.
+    </p>
+    <div class="code-block" style="margin-top:8px">
+      <span class="code-label">bash — dán vào Terminal</span>
+<pre><code>PGPASSWORD=elearning_dev_pw psql -h localhost -p <span class="num">5433</span> -U elearning -d elearning -c <span class="str">"
+<span class="kw">SELECT</span> (<span class="num">0.1</span>::<span class="kw">numeric</span> + <span class="num">0.2</span>::<span class="kw">numeric</span>) <span class="kw">AS</span> numeric_result,
+       (<span class="num">0.1</span>::<span class="kw">float8</span>  + <span class="num">0.2</span>::<span class="kw">float8</span>)  <span class="kw">AS</span> float_result;"</span></code></pre>
+    </div>
     <div class="code-block" style="margin-top:8px">
       <span class="code-label">kết quả THẬT trên Postgres 18.4</span>
-<pre><code><span class="kw">SELECT</span> (<span class="num">0.1</span>::<span class="kw">numeric</span> + <span class="num">0.2</span>::<span class="kw">numeric</span>), (<span class="num">0.1</span>::<span class="kw">float8</span> + <span class="num">0.2</span>::<span class="kw">float8</span>);
-
-  numeric →  <span class="num">0.3</span>
-  float   →  <span class="num">0.30000000000000004</span>   <span class="cmt">← sai từ chữ số thứ 17</span></code></pre>
+<pre><code> numeric_result |    float_result
+----------------+---------------------
+            <span class="num">0.3</span> | <span class="num">0.30000000000000004</span>
+(1 row)                <span class="cmt">↑ sai từ chữ số thứ 17</span></code></pre>
     </div>
     <p style="margin-top:10px; margin-bottom:0">
       Số lẻ nhỏ xíu, nhưng cộng qua hàng triệu giao dịch thì sổ sách <strong>không bao giờ khớp</strong>
