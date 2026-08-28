@@ -422,4 +422,23 @@ copy-paste mà không đọc được mình đang chạy gì.
 phục vụ ngược lại các bài đã học rồi. Đã thêm dòng "sắp tới" vào `lessons/index.html` Module 0.
 Sau này Bài 57 (Linux) sẽ đào sâu; cheat-sheet này chỉ để đọc được khối copy-paste.
 
-**CHƯA SOẠN** — Tuấn nói "sau này". Ưu tiên: soạn xen vào khi Tuấn thấy vướng, hoặc ngay sau Module 3.
+✅ **ĐÃ SOẠN NGAY 2026-08-28** — tôi đề nghị làm sớm thay vì để tới Bài 57, Tuấn đồng ý:
+*"copy dán mù mà ko hiểu khá nguy hiểm"*. File: `reference/dong-lenh-tra-nhanh.html`, 10 mục,
+đã nối vào Module 0 trong `index.html`.
+
+**Đã chạy thật 100% số liệu trong trang** (không con số nào bịa):
+- curl exit 7 (cổng không ai nghe) · 52 (server chết giữa chừng) — dựng server Node giả để ép ra
+- `-w 'code=%{http_code} time=%{time_total}s size=%{size_download}'` → `code=200 time=0.000767s size=11`
+- **Demo đắt nhất:** dựng server echo, POST cùng một JSON hai lần chỉ khác nháy bọc ngoài.
+  Nháy đơn → server nhận `{"title":"NestJS","price":499000}`. Nháy kép → nhận `{title:NestJS}`
+  (mất sạch dấu `"`). Kèm cảnh báo: lỗi này khiến người ta đi sửa DTO/pipe trong khi API không hề sai.
+- Quên `-H Content-Type` → curl mặc định khai `application/x-www-form-urlencoded` (đã kiểm) → Nest 400
+- `MY_TOKEN=abc123 sh -c ...` in `abc123`, lệnh sau in rỗng — chứng minh biến chết theo lệnh
+- heredoc `<<'END'` giữ nguyên `$PRICE và $(date +%Y)`; `<<END` cho ra `499000 và 2026`
+- `ls file-khong-co > out.txt 2>&1` → exit 1, lỗi VÀO file (giải thích stdout=1, stderr=2)
+- `xargs -P1` = **5.132s** vs `-P5` = **1.028s** (server giả chờ 1 giây/request) — nối thẳng về Bài 03
+- psql `\dt` trên DB thật của Tuấn: đủ 6 bảng · sai mật khẩu → exit **2**
+- Đã kiểm `lsof`, `docker ps --filter name=elearning-postgres` (Up 3 weeks, healthy) chạy được trên máy
+
+**Mục 10 "Khi kẹt — 4 câu hỏi theo thứ tự"** là phần đáng giá nhất: dạy cách khoanh vùng lỗi
+(exit code nói về ĐƯỜNG TRUYỀN, status code nói về ỨNG DỤNG) thay vì đoán mò.

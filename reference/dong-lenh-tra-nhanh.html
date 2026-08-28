@@ -1,0 +1,507 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Cheat-sheet · Đọc hiểu dòng lệnh (curl, psql, shell)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../lessons/lesson.css">
+</head>
+<body>
+<div class="wrap">
+
+  <span class="lesson-tag">📄 Cheat-sheet · Module 0 · tra bất cứ lúc nào</span>
+  <h1>Đọc hiểu dòng lệnh — giải mã mọi khối copy-paste</h1>
+  <p class="subtitle">Từ Bài 02 tới giờ bạn đã dán hàng chục khối <code>curl</code> và <code>psql</code>. Trang này giải thích từng ký tự trong đó — để lần sau bạn <em>đọc</em> chứ không <em>dán mù</em>.</p>
+  <p class="meta-line">🖨 In được (Cmd+P) · Mọi kết quả trong trang đã chạy thật trên máy bạn: macOS · curl 8.x · psql 18.3 · bash</p>
+
+  <div class="callout bridge">
+    <div class="ct">🌉 Vì sao trang này quan trọng hơn nó trông có vẻ</div>
+    <p>
+      Dán lệnh không hiểu thì lúc chạy đúng không sao. <strong>Vấn đề là lúc chạy sai.</strong>
+      Bạn sẽ không biết lỗi ở API của mình, ở database, hay chỉ ở chỗ bạn gõ nhầm một dấu nháy —
+      và sẽ mất hàng giờ sửa nhầm chỗ.
+    </p>
+    <p style="margin-bottom:0">
+      Ba thứ trong trang này gây mất thời gian nhiều nhất cho người mới:
+      <strong>nháy đơn vs nháy kép</strong>, <strong>exit code</strong>, và <strong><code>VAR=x lệnh</code></strong>.
+      Nắm ba cái đó là đọc được 90% khối lệnh trong khoá.
+    </p>
+  </div>
+
+  <h2>1. Giải phẫu một dòng lệnh</h2>
+
+  <p>Lấy đúng dòng bạn đã dán ở Bài 11, mổ ra từng mảnh:</p>
+
+  <div class="code-block">
+    <span class="code-label">một dòng — bốn phần</span>
+<pre><code>PGPASSWORD=elearning_dev_pw   psql   -h localhost -p 5433   "SELECT 1;"
+└──────────┬──────────────┘    └┬─┘   └────────┬─────────┘   └────┬────┘
+     BIẾN MÔI TRƯỜNG          LỆNH          CỜ (flag)         THAM SỐ
+   chỉ sống trong lệnh này   chương trình  đổi cách chạy    dữ liệu đưa vào
+                              cần chạy</code></pre>
+  </div>
+
+  <table class="data">
+    <thead><tr><th>Phần</th><th>Nhận ra bằng</th><th>Ví dụ</th></tr></thead>
+    <tbody>
+      <tr><td>Biến môi trường</td><td>có dấu <code>=</code>, đứng <strong>trước</strong> tên lệnh</td><td><code>PGPASSWORD=...</code></td></tr>
+      <tr><td>Lệnh</td><td>từ đầu tiên không có <code>=</code></td><td><code>psql</code>, <code>curl</code>, <code>docker</code></td></tr>
+      <tr><td>Cờ ngắn</td><td>một gạch, một chữ</td><td><code>-s</code>, <code>-i</code>, <code>-p 5433</code></td></tr>
+      <tr><td>Cờ dài</td><td>hai gạch, chữ có nghĩa</td><td><code>--filter</code>, <code>--version</code></td></tr>
+      <tr><td>Tham số</td><td>phần còn lại, không có gạch</td><td>URL, tên file</td></tr>
+    </tbody>
+  </table>
+
+  <div class="callout tip">
+    <div class="ct">🔎 Không nhớ cờ nào làm gì? Hỏi thẳng máy</div>
+    <div class="code-block" style="margin-top:8px">
+      <span class="code-label">bash</span>
+<pre><code>man curl          <span class="cmt"># sổ tay đầy đủ — bấm / để tìm, q để thoát</span>
+curl --help        <span class="cmt"># bản ngắn</span>
+psql --help</code></pre>
+    </div>
+    <p style="margin-bottom:0">
+      Trong <code>man</code>, gõ <code>/-w</code> rồi Enter để nhảy tới chỗ giải thích cờ <code>-w</code>.
+    </p>
+  </div>
+
+  <h2>2. Nháy đơn vs nháy kép — thủ phạm số một</h2>
+
+  <p>
+    Trước khi <code>curl</code> nhìn thấy lệnh của bạn, <strong>shell đọc trước và sửa lại</strong>.
+    Loại nháy quyết định shell được phép sửa những gì.
+  </p>
+
+  <table class="data">
+    <thead><tr><th>Kiểu</th><th>Shell có nội suy không?</th><th>Dùng khi</th></tr></thead>
+    <tbody>
+      <tr><td><code>'nháy đơn'</code></td><td><strong>KHÔNG</strong> — giữ nguyên từng ký tự</td><td>JSON, mật khẩu, chuỗi có <code>$</code> hoặc <code>"</code></td></tr>
+      <tr><td><code>"nháy kép"</code></td><td><strong>CÓ</strong> — thay <code>$BIEN</code>, <code>$(lệnh)</code></td><td>khi bạn <em>muốn</em> chèn giá trị biến vào</td></tr>
+      <tr><td>không nháy</td><td>CÓ, và còn tách chuỗi theo khoảng trắng</td><td>chỉ khi giá trị không có khoảng trắng</td></tr>
+    </tbody>
+  </table>
+
+  <div class="code-block">
+    <span class="code-label">bash — chạy thử để thấy khác biệt</span>
+<pre><code>PRICE=<span class="num">499000</span>
+
+<span class="fn">echo</span> <span class="str">"nháy kép : {\"price\": $PRICE}"</span>
+<span class="fn">echo</span> <span class="str">'nháy đơn : {"price": $PRICE}'</span></code></pre>
+  </div>
+
+  <div class="code-block">
+    <span class="code-label">kết quả THẬT</span>
+<pre><code>nháy kép : {"price": 499000}     <span class="cmt">← $PRICE đã bị thay bằng giá trị</span>
+nháy đơn : {"price": $PRICE}     <span class="cmt">← giữ nguyên y hệt</span></code></pre>
+  </div>
+
+  <div class="callout danger">
+    <div class="ct">🚨 Lỗi kinh điển: bọc JSON bằng nháy kép</div>
+    <p>JSON <em>bản thân nó</em> đã đầy dấu <code>"</code>. Bọc ngoài bằng <code>"</code> nữa là shell nuốt mất hết:</p>
+    <div class="code-block" style="margin-top:8px">
+      <span class="code-label">bash — hai lệnh, chỉ khác loại nháy bọc ngoài</span>
+<pre><code><span class="cmt"># ĐÚNG — nháy đơn bọc ngoài, dấu " bên trong sống sót</span>
+curl -s -X POST http://localhost:<span class="num">4477</span>/ \
+  -H <span class="str">'Content-Type: application/json'</span> \
+  -d <span class="str">'{"title":"NestJS","price":499000}'</span>
+
+<span class="cmt"># SAI — nháy kép bọc ngoài</span>
+curl -s -X POST http://localhost:<span class="num">4477</span>/ \
+  -H <span class="str">'Content-Type: application/json'</span> \
+  -d <span class="str">"{"title":"NestJS"}"</span></code></pre>
+    </div>
+    <div class="code-block" style="margin-top:8px">
+      <span class="code-label">server THẬT nhận được gì (đã chạy)</span>
+<pre><code>ĐÚNG → bodyServerNhanDuoc: <span class="str">"{\"title\":\"NestJS\",\"price\":499000}"</span>
+
+SAI  → bodyServerNhanDuoc: <span class="str">"{title:NestJS}"</span>
+                            <span class="cmt">↑ MẤT SẠCH dấu " — JSON hỏng, API trả 400</span></code></pre>
+    </div>
+    <p style="margin-top:10px; margin-bottom:0">
+      Và đây là chỗ tốn thời gian nhất: <strong>API của bạn không hề sai</strong>. Bạn sẽ đi sửa DTO,
+      sửa ValidationPipe, sửa controller — trong khi lỗi nằm ở một dấu nháy trong Terminal.
+      <strong>JSON thì luôn bọc nháy đơn.</strong>
+    </p>
+  </div>
+
+  <h2>3. <code>curl</code> — cờ nào làm gì</h2>
+
+  <table class="data">
+    <thead><tr><th>Cờ</th><th>Làm gì</th><th>Khi nào dùng</th></tr></thead>
+    <tbody>
+      <tr><td><code>-s</code></td><td><em>silent</em> — tắt thanh tiến trình</td><td>gần như luôn luôn, cho output sạch</td></tr>
+      <tr><td><code>-i</code></td><td>in cả <strong>header</strong> phản hồi</td><td>xem status code, Content-Type</td></tr>
+      <tr><td><code>-X POST</code></td><td>đổi method (mặc định GET)</td><td>tạo dữ liệu</td></tr>
+      <tr><td><code>-H '...'</code></td><td>thêm một header <strong>gửi đi</strong></td><td>bắt buộc khi gửi JSON</td></tr>
+      <tr><td><code>-d '...'</code></td><td>gửi body</td><td>POST/PUT/PATCH</td></tr>
+      <tr><td><code>-o /dev/null</code></td><td>vứt body đi</td><td>chỉ quan tâm tốc độ / status</td></tr>
+      <tr><td><code>-w '...'</code></td><td>in thông số sau khi xong</td><td>đo status, thời gian</td></tr>
+      <tr><td><code>-L</code></td><td>đi theo redirect 3xx</td><td>khi API trả 301/302</td></tr>
+      <tr><td><code>-v</code></td><td>in cả request lẫn response thô</td><td>khi bí thật sự</td></tr>
+    </tbody>
+  </table>
+
+  <div class="code-block">
+    <span class="code-label">bash — xem header phản hồi</span>
+<pre><code>curl -s -i http://localhost:<span class="num">4455</span>/</code></pre>
+  </div>
+
+  <div class="code-block">
+    <span class="code-label">kết quả THẬT</span>
+<pre><code>HTTP/1.1 200 OK
+Content-Type: application/json
+Date: Fri, 28 Aug 2026 09:24:08 GMT
+Connection: keep-alive
+Keep-Alive: timeout=5</code></pre>
+  </div>
+
+  <p>
+    <code>-w</code> in ra <em>thông số về cuộc gọi</em>, không phải nội dung. Ghép với <code>-o /dev/null</code>
+    thành công cụ đo nhanh:
+  </p>
+
+  <div class="code-block">
+    <span class="code-label">bash</span>
+<pre><code>curl -s -o /dev/null -w <span class="str">'code=%{http_code} time=%{time_total}s size=%{size_download}\n'</span> \
+  http://localhost:<span class="num">4455</span>/</code></pre>
+  </div>
+
+  <div class="code-block">
+    <span class="code-label">kết quả THẬT</span>
+<pre><code>code=200 time=0.000767s size=11</code></pre>
+  </div>
+
+  <div class="callout warn">
+    <div class="ct">⚠️ Quên <code>-H 'Content-Type: application/json'</code> thì sao?</div>
+    <p style="margin-bottom:0">
+      <code>curl</code> <strong>không</strong> tự đoán là JSON. Mặc định nó khai
+      <code>application/x-www-form-urlencoded</code> — đã kiểm chứng thật. Nest nhìn header đó, không
+      parse JSON, nên <code>@Body()</code> rỗng và ValidationPipe trả <strong>400</strong> dù JSON bạn gửi
+      hoàn toàn đúng. Gửi JSON thì <code>-H</code> là <em>bắt buộc</em>, không phải tuỳ chọn.
+    </p>
+  </div>
+
+  <h2>4. Exit code — con số nói lỗi nằm ở đâu</h2>
+
+  <p>
+    Mọi lệnh khi kết thúc đều trả một con số. <strong>0 = thành công</strong>, khác 0 = có chuyện.
+    Con số này quý ở chỗ nó phân biệt <em>lỗi mạng</em> với <em>lỗi ứng dụng</em>.
+  </p>
+
+  <div class="code-block">
+    <span class="code-label">bash — đọc exit code của lệnh vừa chạy</span>
+<pre><code>curl -s http://localhost:<span class="num">9999</span>/
+<span class="fn">echo</span> <span class="str">"exit=$?"</span>          <span class="cmt"># $? = exit code của lệnh NGAY TRƯỚC</span></code></pre>
+  </div>
+
+  <div class="code-block">
+    <span class="code-label">kết quả THẬT</span>
+<pre><code>exit=7</code></pre>
+  </div>
+
+  <table class="data">
+    <thead><tr><th>Exit code</th><th>Nghĩa</th><th>Nghĩa với bạn</th></tr></thead>
+    <tbody>
+      <tr><td><code>0</code></td><td>xong xuôi</td><td>curl gọi được — <em>kể cả khi API trả 404/500</em></td></tr>
+      <tr><td><code>7</code></td><td>không kết nối được</td><td><strong>server chưa chạy</strong>, hoặc sai port</td></tr>
+      <tr><td><code>52</code></td><td>server không trả gì</td><td><strong>process chết giữa chừng</strong> (Bài 02!)</td></tr>
+      <tr><td><code>6</code></td><td>không phân giải được tên miền</td><td>gõ sai host, hoặc mất mạng</td></tr>
+      <tr><td><code>28</code></td><td>hết giờ chờ</td><td>server treo, hoặc đang bận CPU (Bài 03)</td></tr>
+    </tbody>
+  </table>
+
+  <div class="callout why">
+    <div class="ct">💡 Vì sao API trả 500 mà exit code vẫn là 0</div>
+    <p style="margin-bottom:0">
+      Vì <code>curl</code> chỉ chịu trách nhiệm <strong>chuyển thư</strong>. Thư giao tận tay là nhiệm vụ
+      hoàn thành — nội dung thư báo tin xấu là chuyện của bạn với server, không phải lỗi của curl.
+      <br><br>
+      Nên: <strong>exit code nói về đường truyền, status code nói về ứng dụng.</strong> Muốn kiểm status
+      trong script thì dùng <code>-w '%{http_code}'</code>, đừng dựa vào <code>$?</code>.
+    </p>
+  </div>
+
+  <h2>5. <code>VAR=x lệnh</code> — biến chỉ sống một lần</h2>
+
+  <p>Hai cách đặt biến, khác nhau ở <strong>tuổi thọ</strong>:</p>
+
+  <div class="code-block">
+    <span class="code-label">bash</span>
+<pre><code><span class="cmt"># Cách 1 — gán TRƯỚC tên lệnh: chỉ lệnh đó thấy, xong là biến mất</span>
+MY_TOKEN=abc123 sh -c <span class="str">'echo "trong lệnh: $MY_TOKEN"'</span>
+<span class="fn">echo</span> <span class="str">"lệnh sau:  [$MY_TOKEN]"</span></code></pre>
+  </div>
+
+  <div class="code-block">
+    <span class="code-label">kết quả THẬT</span>
+<pre><code>trong lệnh: abc123
+lệnh sau:  []          <span class="cmt">← rỗng: biến đã chết cùng lệnh trước</span></code></pre>
+  </div>
+
+  <div class="code-block">
+    <span class="code-label">bash</span>
+<pre><code><span class="cmt"># Cách 2 — export: sống tới khi đóng cửa sổ Terminal</span>
+<span class="kw">export</span> PGPASSWORD=elearning_dev_pw
+psql -h localhost -p <span class="num">5433</span> -U elearning -d elearning -c <span class="str">"\dt"</span>
+psql -h localhost -p <span class="num">5433</span> -U elearning -d elearning -c <span class="str">"SELECT 1;"</span>
+<span class="cmt"># cả hai lệnh trên đều dùng lại mật khẩu đó</span></code></pre>
+  </div>
+
+  <div class="callout tip">
+    <div class="ct">🔎 Chọn cái nào</div>
+    <p style="margin-bottom:0">
+      Chạy <strong>một lệnh</strong> → gán trước tên lệnh (an toàn hơn, không sót mật khẩu trong phiên).
+      Chạy <strong>nhiều lệnh liên tiếp</strong> → <code>export</code> một lần cho đỡ lặp.
+      <br><br>
+      Cả hai đều <strong>không</strong> sống qua cửa sổ Terminal mới. Mở tab mới mà <code>psql</code> hỏi
+      mật khẩu thì đó là lý do — không phải hỏng gì cả.
+    </p>
+  </div>
+
+  <h2>6. <code>psql</code> — nói chuyện với Postgres</h2>
+
+  <table class="data">
+    <thead><tr><th>Cờ</th><th>Nghĩa</th></tr></thead>
+    <tbody>
+      <tr><td><code>-h localhost</code></td><td><em>host</em> — máy chứa database</td></tr>
+      <tr><td><code>-p 5433</code></td><td><em>port</em> — cổng (Bài 00 chọn 5433 để không đụng Postgres cài sẵn)</td></tr>
+      <tr><td><code>-U elearning</code></td><td><em>user</em> — tài khoản database</td></tr>
+      <tr><td><code>-d elearning</code></td><td><em>database</em> — một server chứa nhiều database</td></tr>
+      <tr><td><code>-c "..."</code></td><td>chạy <strong>một câu</strong> rồi thoát</td></tr>
+      <tr><td><code>-f file.sql</code></td><td>chạy <strong>cả file</strong> rồi thoát</td></tr>
+      <tr><td><code>-tA</code></td><td>bỏ khung, bỏ header — lấy giá trị trần cho script</td></tr>
+      <tr><td>(không có <code>-c</code>/<code>-f</code>)</td><td>vào chế độ <strong>tương tác</strong>, gõ tới khi <code>\q</code></td></tr>
+    </tbody>
+  </table>
+
+  <p>
+    Lệnh bắt đầu bằng dấu <code>\</code> <strong>không phải SQL</strong> — đó là meta-command của riêng
+    <code>psql</code>, chỉ nó hiểu:
+  </p>
+
+  <table class="data">
+    <thead><tr><th>Meta-command</th><th>Xem gì</th></tr></thead>
+    <tbody>
+      <tr><td><code>\dt</code></td><td>danh sách bảng</td></tr>
+      <tr><td><code>\d+ courses</code></td><td>chi tiết một bảng: cột, kiểu, ràng buộc, index</td></tr>
+      <tr><td><code>\l</code></td><td>danh sách database</td></tr>
+      <tr><td><code>\du</code></td><td>danh sách user</td></tr>
+      <tr><td><code>\x</code></td><td>bật/tắt hiển thị dọc (dễ đọc khi nhiều cột)</td></tr>
+      <tr><td><code>\q</code></td><td>thoát</td></tr>
+    </tbody>
+  </table>
+
+  <div class="code-block">
+    <span class="code-label">bash — đã chạy thật trên DB của bạn</span>
+<pre><code><span class="kw">export</span> PGPASSWORD=elearning_dev_pw
+psql -h localhost -p <span class="num">5433</span> -U elearning -d elearning -c <span class="str">"\dt"</span></code></pre>
+  </div>
+
+  <div class="code-block">
+    <span class="code-label">kết quả THẬT</span>
+<pre><code>              List of tables
+ Schema |    Name     | Type  |   Owner
+--------+-------------+-------+-----------
+ public | courses     | table | elearning
+ public | enrollments | table | elearning
+ public | lessons     | table | elearning
+ public | order_items | table | elearning
+ public | orders      | table | elearning
+ public | users       | table | elearning
+(6 rows)</code></pre>
+  </div>
+
+  <div class="callout warn">
+    <div class="ct">⚠️ <code>psql</code> đứng im không phản ứng?</div>
+    <p style="margin-bottom:0">
+      Nó đang <strong>chờ bạn gõ mật khẩu</strong> nhưng không hiện chữ nào (kể cả dấu <code>*</code>) —
+      đó là cố ý, để không ai đọc trộm. Cứ gõ rồi Enter. Hoặc dùng <code>PGPASSWORD=</code> ở mục 5 để
+      khỏi bị hỏi. Sai mật khẩu thì exit code là <strong>2</strong> kèm dòng
+      <code>password authentication failed</code>.
+    </p>
+  </div>
+
+  <h2>7. Heredoc — dán nhiều dòng vào một lệnh</h2>
+
+  <p>
+    Khi cần đưa cả khối SQL nhiều dòng vào <code>psql</code>, viết trên một dòng thì không đọc nổi.
+    <strong>Heredoc</strong> là cú pháp "mọi thứ từ đây tới chữ kết thúc là dữ liệu đầu vào":
+  </p>
+
+  <div class="code-block">
+    <span class="code-label">bash</span>
+<pre><code>psql -h localhost -p <span class="num">5433</span> -U elearning -d elearning &lt;&lt;<span class="str">'SQL'</span>
+  <span class="kw">INSERT INTO</span> <span class="tbl">users</span> (email, full_name)
+  <span class="kw">VALUES</span> (<span class="str">'a@example.com'</span>, <span class="str">'Học viên A'</span>);
+SQL</code></pre>
+  </div>
+
+  <div class="callout danger">
+    <div class="ct">🚨 Dấu nháy quanh <code>'SQL'</code> không phải cho đẹp</div>
+    <p>Nó quyết định shell có được sửa nội dung bên trong hay không — y hệt quy tắc ở mục 2:</p>
+    <div class="code-block" style="margin-top:8px">
+      <span class="code-label">bash — hai heredoc, chỉ khác cặp nháy</span>
+<pre><code>PRICE=<span class="num">499000</span>
+
+<span class="fn">cat</span> &lt;&lt;<span class="str">'END'</span>
+không nội suy: $PRICE và $(date +%Y)
+END
+
+<span class="fn">cat</span> &lt;&lt;END
+có nội suy   : $PRICE và $(date +%Y)
+END</code></pre>
+    </div>
+    <div class="code-block" style="margin-top:8px">
+      <span class="code-label">kết quả THẬT</span>
+<pre><code>không nội suy: $PRICE và $(date +%Y)     <span class="cmt">← nguyên xi</span>
+có nội suy   : 499000 và 2026            <span class="cmt">← shell đã thay hết</span></code></pre>
+    </div>
+    <p style="margin-top:10px; margin-bottom:0">
+      Với SQL thì <strong>luôn dùng <code>&lt;&lt;'SQL'</code> có nháy</strong>. Không có nháy mà SQL của bạn
+      chứa <code>$</code> (chuỗi có ký tự đó, hàm PostgreSQL dùng <code>$$</code>...) là shell nuốt mất,
+      câu lệnh sai một cách khó hiểu.
+    </p>
+  </div>
+
+  <h2>8. Nối lệnh: <code>|</code>, <code>&gt;</code>, <code>2&gt;&amp;1</code>, <code>&amp;&amp;</code></h2>
+
+  <table class="data">
+    <thead><tr><th>Ký hiệu</th><th>Làm gì</th><th>Ví dụ đã dùng trong khoá</th></tr></thead>
+    <tbody>
+      <tr><td><code>|</code></td><td>đưa output lệnh trái làm <em>input</em> lệnh phải</td><td><code>seq 5 | xargs ...</code></td></tr>
+      <tr><td><code>&gt;</code></td><td>ghi output ra file (<strong>đè</strong>)</td><td><code>npm start &gt; log.txt</code></td></tr>
+      <tr><td><code>&gt;&gt;</code></td><td>ghi <strong>nối thêm</strong> vào cuối file</td><td>gom log nhiều lần chạy</td></tr>
+      <tr><td><code>2&gt;&amp;1</code></td><td>gộp luồng lỗi vào luồng thường</td><td>để <code>&gt;</code> bắt được <em>cả</em> lỗi</td></tr>
+      <tr><td><code>&amp;&amp;</code></td><td>chạy lệnh sau <strong>chỉ khi</strong> lệnh trước thành công</td><td><code>npm run build &amp;&amp; npm start</code></td></tr>
+      <tr><td><code>;</code></td><td>chạy lệnh sau <strong>bất kể</strong> trước đúng sai</td><td>gộp lệnh không liên quan</td></tr>
+      <tr><td><code>&amp;</code></td><td>chạy nền, trả prompt lại ngay</td><td><code>node srv.js &amp;</code></td></tr>
+    </tbody>
+  </table>
+
+  <div class="callout why">
+    <div class="ct">💡 Vì sao có <code>2&gt;&amp;1</code> — hai luồng ra khác nhau</div>
+    <p style="margin-bottom:0">
+      Mỗi lệnh có <strong>hai đường ra</strong>: <em>stdout</em> (số 1, kết quả bình thường) và
+      <em>stderr</em> (số 2, thông báo lỗi). Trên màn hình chúng trộn lẫn nên bạn tưởng là một.
+      <br><br>
+      <code>&gt; out.txt</code> chỉ bắt luồng <strong>1</strong>. Nên khi lệnh hỏng, file rỗng còn lỗi thì
+      vẫn nhảy ra màn hình. <code>2&gt;&amp;1</code> nghĩa là <em>"đổ luồng 2 vào chỗ luồng 1 đang chảy"</em> —
+      từ đó file bắt được cả hai.
+    </p>
+  </div>
+
+  <div class="code-block">
+    <span class="code-label">bash — chứng minh</span>
+<pre><code><span class="fn">ls</span> khong-ton-tai.txt &gt; out.txt 2&gt;&amp;1
+<span class="fn">echo</span> <span class="str">"exit=$?"</span>
+<span class="fn">cat</span> out.txt</code></pre>
+  </div>
+
+  <div class="code-block">
+    <span class="code-label">kết quả THẬT</span>
+<pre><code>exit=1
+ls: khong-ton-tai.txt: No such file or directory   <span class="cmt">← lỗi đã VÀO file</span></code></pre>
+  </div>
+
+  <div class="code-block">
+    <span class="code-label">bash — &amp;&amp; và ; khác nhau thế nào</span>
+<pre><code><span class="fn">false</span> &amp;&amp; <span class="fn">echo</span> <span class="str">"không bao giờ in"</span>; <span class="fn">echo</span> <span class="str">"&amp;&amp; : đã bỏ qua"</span>
+<span class="fn">false</span> ; <span class="fn">echo</span> <span class="str">"; : vẫn chạy"</span></code></pre>
+  </div>
+
+  <div class="code-block">
+    <span class="code-label">kết quả THẬT</span>
+<pre><code>&amp;&amp; : đã bỏ qua
+; : vẫn chạy</code></pre>
+  </div>
+
+  <h2>9. <code>xargs -P</code> — bắn nhiều request cùng lúc</h2>
+
+  <p>Đây là dòng bạn đã dán ở Bài 09 mà chưa ai giải thích:</p>
+
+  <div class="code-block">
+    <span class="code-label">mổ xẻ</span>
+<pre><code><span class="fn">seq</span> <span class="num">5</span> | xargs -P<span class="num">5</span> -I{} curl -s -o /dev/null http://localhost:<span class="num">3333</span>/courses
+└──┬──┘   └─┬──┘ └──┬─┘ └───────────────┬──────────────────────┘
+   │        │       │                   │
+in 1..5   chạy   chỗ thay          lệnh chạy 5 lần
+       5 tiến trình  số vào
+        SONG SONG  (ở đây không dùng)</code></pre>
+  </div>
+
+  <div class="code-block">
+    <span class="code-label">bash — đo thật, server mỗi request chờ 1 giây</span>
+<pre><code><span class="fn">time</span> (<span class="fn">seq</span> <span class="num">5</span> | xargs -P<span class="num">1</span> -I{} curl -s -o /dev/null http://localhost:<span class="num">4466</span>/)
+<span class="fn">time</span> (<span class="fn">seq</span> <span class="num">5</span> | xargs -P<span class="num">5</span> -I{} curl -s -o /dev/null http://localhost:<span class="num">4466</span>/)</code></pre>
+  </div>
+
+  <div class="code-block">
+    <span class="code-label">kết quả THẬT</span>
+<pre><code>-P1 (tuần tự)  real  0m5.132s     <span class="cmt">← 5 × 1 giây, xếp hàng</span>
+-P5 (song song) real  0m1.028s     <span class="cmt">← cả 5 chờ CÙNG LÚC</span></code></pre>
+  </div>
+
+  <p>
+    Con số này chính là bài học Bài 03 nhìn từ phía client: 5 request I/O chờ song song vẫn hết
+    ~1 giây, vì chờ không tốn CPU.
+  </p>
+
+  <h2>10. Khi kẹt — bốn câu hỏi theo thứ tự</h2>
+
+  <table class="data">
+    <thead><tr><th>#</th><th>Hỏi</th><th>Kiểm bằng</th></tr></thead>
+    <tbody>
+      <tr><td>1</td><td>Server có đang chạy không?</td><td>exit code <code>7</code> = chưa chạy · <code>lsof -i :3333</code></td></tr>
+      <tr><td>2</td><td>Có gọi đúng cổng không?</td><td>API <code>3333</code> · Postgres <code>5433</code> · Redis <code>6379</code></td></tr>
+      <tr><td>3</td><td>Request đi tới nơi chứ?</td><td><code>-i</code> xem status · <code>0</code> + <code>404</code> = tới rồi, sai đường dẫn</td></tr>
+      <tr><td>4</td><td>Body có nguyên vẹn không?</td><td>nháy đơn chưa? có <code>-H Content-Type</code> chưa?</td></tr>
+    </tbody>
+  </table>
+
+  <div class="code-block">
+    <span class="code-label">bash — bộ lệnh cấp cứu</span>
+<pre><code><span class="cmt"># Ai đang giữ cổng 3333?</span>
+lsof -i :<span class="num">3333</span>
+
+<span class="cmt"># Giết tiến trình cũ còn sót (hay gặp khi restart Nest)</span>
+lsof -ti :<span class="num">3333</span> | xargs <span class="fn">kill</span> -<span class="num">9</span>
+
+<span class="cmt"># Container còn sống không?</span>
+docker ps --filter name=elearning-postgres
+
+<span class="cmt"># Xem log container</span>
+docker logs --tail <span class="num">50</span> elearning-postgres
+
+<span class="cmt"># Kiểm nhanh API còn thở không (chỉ in status)</span>
+curl -s -o /dev/null -w <span class="str">'%{http_code}\n'</span> http://localhost:<span class="num">3333</span>/courses</code></pre>
+  </div>
+
+  <div class="callout tip">
+    <div class="ct">🔎 Ba phím tắt Terminal đáng nhớ nhất</div>
+    <p style="margin-bottom:0">
+      <code>Ctrl+C</code> dừng lệnh đang chạy · <code>Ctrl+R</code> tìm lại lệnh đã gõ (gõ vài chữ là ra) ·
+      <code>Ctrl+L</code> xoá màn hình. Phím <code>↑</code> lấy lại lệnh trước — bạn sẽ dùng nó
+      nhiều nhất trong đời làm backend.
+    </p>
+  </div>
+
+  <h2>Nguồn chính chủ</h2>
+  <p class="meta-line">
+    <a href="https://curl.se/docs/manpage.html" target="_blank">curl manpage</a> ·
+    <a href="https://curl.se/libcurl/c/libcurl-errors.html" target="_blank">curl exit codes</a> ·
+    <a href="https://www.postgresql.org/docs/current/app-psql.html" target="_blank">psql docs</a> ·
+    <a href="https://www.gnu.org/software/bash/manual/bash.html#Quoting" target="_blank">Bash — Quoting</a> ·
+    <a href="https://www.gnu.org/software/bash/manual/bash.html#Redirections" target="_blank">Bash — Redirections</a>
+  </p>
+
+  <div class="navbar">
+    <a href="../lessons/index.html">🏠 Mục lục</a>
+    <a href="docker-lenh-thiet-yeu.html">Cheat-sheet Docker →</a>
+  </div>
+
+</div>
+<script src="../lessons/lesson-enhance.js"></script>
+</body>
+</html>
